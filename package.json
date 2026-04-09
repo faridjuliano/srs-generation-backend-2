@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.7",
+    "@google/generative-ai": "^0.24.1",
     "express": "^4.21.2"
   },
   "devDependencies": {
