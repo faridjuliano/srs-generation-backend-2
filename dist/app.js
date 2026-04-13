@@ -8,6 +8,8 @@ const cors_1 = __importDefault(require("cors"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const srsGenerate_1 = __importDefault(require("./routes/srsGenerate"));
 const health_1 = __importDefault(require("./routes/health"));
+const validate_1 = __importDefault(require("./routes/validate"));
+const autoFix_1 = __importDefault(require("./routes/autoFix"));
 const openapi_1 = __importDefault(require("./docs/openapi"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
@@ -18,4 +20,6 @@ app.get('/api/docs.json', (_req, res) => {
 app.use('/api/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(openapi_1.default));
 app.use('/api/health', health_1.default);
 app.use('/api/srs', srsGenerate_1.default);
+app.use('/api/srs', validate_1.default);
+app.use('/api/srs', autoFix_1.default);
 exports.default = app;

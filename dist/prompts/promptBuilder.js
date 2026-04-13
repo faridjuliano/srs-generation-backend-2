@@ -498,6 +498,7 @@ FINAL OUTPUT RULES:
 }
 function generatePrompt(payload, promptSet = 'default') {
     const { projectName, projectVision } = payload;
+    void promptSet;
     return buildIso29148Prompt(projectName, projectVision);
 }
 function generateArchitectureDiagramPrompt(srsContent) {

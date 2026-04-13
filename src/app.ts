@@ -3,6 +3,8 @@ import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import srsGenerateRouter from './routes/srsGenerate';
 import healthRouter from './routes/health';
+import validateRouter from './routes/validate';
+import autoFixRouter from './routes/autoFix';
 import openApiSpec from './docs/openapi';
 
 const app = express();
@@ -17,5 +19,7 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 app.use('/api/health', healthRouter);
 app.use('/api/srs', srsGenerateRouter);
+app.use('/api/srs', validateRouter);
+app.use('/api/srs', autoFixRouter);
 
 export default app;
