@@ -125,6 +125,83 @@ const openApiSpec = {
         },
       },
     },
+    '/api/srs/reprompt': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Revise existing SRS using follow-up prompt',
+        description: 'Sends existing SRS content and user instruction to Gemini, then returns revised SRS plus validation.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  content: {
+                    type: 'object',
+                    description: 'Existing SRS JSON object to revise',
+                    additionalProperties: true,
+                  },
+                  instruction: {
+                    type: 'string',
+                    example: 'Update non-functional requirements to include MFA and tighten availability target to 99.95%.',
+                  },
+                },
+                required: ['content', 'instruction'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'SRS revised successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    content: { type: 'object', additionalProperties: true },
+                    validation: { type: 'object', nullable: true, additionalProperties: true },
+                  },
+                  required: ['success', 'content'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid request payload',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Revision failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Failed to revise SRS' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/srs/validate': {
       post: {
         tags: ['Validation'],
@@ -257,7 +334,7 @@ const openApiSpec = {
       post: {
         tags: ['SRS'],
         summary: 'Auto-fix SRS content',
-        description: 'Automatically repair common SRS structure issues, missing fields, and type mismatches.',
+        description: 'Applies fixes based on validation issues from payload.validation.issues (or payload.issues), then re-validates.',
         requestBody: {
           required: true,
           content: {
@@ -270,14 +347,46 @@ const openApiSpec = {
                     description: 'The SRS object to auto-fix',
                     additionalProperties: true,
                   },
+                  validation: {
+                    type: 'object',
+                    properties: {
+                      issues: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            severity: { type: 'string', example: 'error' },
+                            code: { type: 'string', example: 'BROKEN_TRACE_STAKEHOLDER' },
+                            message: { type: 'string', example: 'Requirement references unknown stakeholder ID: STK-001' },
+                            requirementId: { type: 'string', example: 'FR-001' },
+                            path: { type: 'string', example: 'functionalRequirements[0].traceToStakeholders' },
+                            suggestion: { type: 'string', example: 'Reference an existing stakeholder ID from the stakeholders section.' },
+                          },
+                        },
+                      },
+                    },
+                  },
                 },
                 required: ['content'],
               },
               example: {
                 content: {
-                  documentControl: {
-                    projectName: 'My Project',
+                  '2ContextOfTheSystem': {
+                    '2.3Stakeholders': [{ id: 'STK-010' }, { id: 'STK-2000' }],
                   },
+                  '4FunctionalRequirements': [
+                    { id: 'FR-001', traceToStakeholders: ['STK-001'], traceToUseCases: ['UC-001'] },
+                  ],
+                },
+                validation: {
+                  issues: [
+                    {
+                      severity: 'error',
+                      code: 'BROKEN_TRACE_STAKEHOLDER',
+                      message: 'Requirement references unknown stakeholder ID: STK-001',
+                      requirementId: 'FR-001',
+                    },
+                  ],
                 },
               },
             },
@@ -293,6 +402,10 @@ const openApiSpec = {
                   properties: {
                     success: { type: 'boolean', example: true },
                     content: { type: 'object', additionalProperties: true },
+                    fixesApplied: {
+                      type: 'array',
+                      items: { type: 'string' },
+                    },
                     validation: {
                       type: 'object',
                       properties: {
@@ -304,23 +417,16 @@ const openApiSpec = {
                       },
                     },
                   },
-                  required: ['success', 'content', 'validation'],
+                  required: ['success', 'content', 'fixesApplied', 'validation'],
                 },
                 example: {
                   success: true,
                   content: {
-                    documentControl: {
-                      documentTitle: 'Software Requirements Specification',
-                      projectName: 'My Project',
-                      documentId: 'SRS-001',
-                      version: '1.0',
-                      status: 'Draft',
-                      date: '2026-04-13',
-                      preparedBy: 'AI Generator',
-                      reviewedBy: '',
-                      approvedBy: '',
-                    },
+                    '4FunctionalRequirements': [
+                      { id: 'FR-001', traceToStakeholders: ['STK-010'], traceToUseCases: ['UC-001'] },
+                    ],
                   },
+                  fixesApplied: ['Updated FR-001 traceToStakeholders: STK-001 -> STK-010'],
                   validation: {
                     passed: true,
                     errorCount: 0,

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { generatePrompt, generateArchitectureDiagramPrompt } from '../prompts/promptBuilder';
+import { generatePrompt, generateArchitectureDiagramPrompt, generateRevisionPrompt } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { validateSRS } from '../validators/srsValidator';
@@ -8,6 +8,26 @@ const router = Router();
 
 const ENABLE_VALIDATION = true;
 const ACTIVE_PROMPT_SET: 'default' | 'iso-strict' | 'ieee-strict' = 'iso-strict';
+
+function enforceCurrentDate(content: Record<string, unknown>): Record<string, unknown> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const documentControl = content.documentControl;
+  if (documentControl && typeof documentControl === 'object' && !Array.isArray(documentControl)) {
+    (documentControl as Record<string, unknown>).date = today;
+  }
+
+  const revisionHistory = content.revisionHistory;
+  if (Array.isArray(revisionHistory)) {
+    revisionHistory.forEach((item) => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        (item as Record<string, unknown>).date = today;
+      }
+    });
+  }
+
+  return content;
+}
 
 router.post('/generate', async (req: Request, res: Response) => {
   try {
@@ -58,7 +78,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     }
 
-    const architecturePrompt = generateArchitectureDiagramPrompt(parsed);
+    const normalizedParsed = enforceCurrentDate(parsed as Record<string, unknown>);
+
+    const architecturePrompt = generateArchitectureDiagramPrompt(normalizedParsed);
     const architectureRawText = await generateWithGemini(architecturePrompt);
 
     let architectureParsed: unknown;
@@ -84,12 +106,12 @@ router.post('/generate', async (req: Request, res: Response) => {
         };
 
     const validationResult = ENABLE_VALIDATION
-      ? validateSRS(parsed as any)
+      ? validateSRS(normalizedParsed as any)
       : null;
 
     return res.json({
       success: true,
-      content: parsed,
+      content: normalizedParsed,
       diagrams,
       validation: validationResult
     });
@@ -98,6 +120,62 @@ router.post('/generate', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to generate SRS'
+    });
+  }
+});
+
+router.post('/reprompt', async (req: Request, res: Response) => {
+  try {
+    const { content, instruction } = req.body || {};
+
+    if (!content || typeof content !== 'object' || Array.isArray(content)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a valid "content" object.',
+      });
+    }
+
+    if (typeof instruction !== 'string' || instruction.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "instruction" string.',
+      });
+    }
+
+    const revisionPrompt = generateRevisionPrompt(content, instruction.trim());
+    const rawText = await generateWithGemini(revisionPrompt);
+
+    let revised: unknown;
+    try {
+      revised = JSON.parse(rawText);
+    } catch {
+      const repaired = await repairJson(rawText);
+      revised = JSON.parse(repaired);
+    }
+
+    if (!revised || typeof revised !== 'object' || Array.isArray(revised)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Model returned invalid revised JSON object',
+      });
+    }
+
+    const normalizedRevised = enforceCurrentDate(revised as Record<string, unknown>);
+
+    const validationResult = ENABLE_VALIDATION
+      ? validateSRS(normalizedRevised as any)
+      : null;
+
+    return res.json({
+      success: true,
+      content: normalizedRevised,
+      validation: validationResult,
+    });
+  } catch (error) {
+    console.error('SRS reprompt error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to revise SRS',
     });
   }
 });

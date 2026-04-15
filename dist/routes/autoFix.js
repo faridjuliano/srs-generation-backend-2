@@ -3,156 +3,114 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const srsValidator_1 = require("../validators/srsValidator");
 const router = (0, express_1.Router)();
-function autoFixSRS(content) {
+function asRecord(value) {
+    return value && typeof value === 'object' ? value : {};
+}
+function getFunctionalRequirements(content) {
+    const primary = content['4FunctionalRequirements'];
+    if (Array.isArray(primary))
+        return primary;
+    const fallback = content.functionalRequirements;
+    if (Array.isArray(fallback))
+        return fallback;
+    return [];
+}
+function getStakeholderIds(content) {
+    const context = asRecord(content['2ContextOfTheSystem']);
+    const nested = context['2.3Stakeholders'];
+    if (!Array.isArray(nested))
+        return [];
+    return nested
+        .map(item => asRecord(item).id)
+        .filter((id) => typeof id === 'string' && id.trim().length > 0);
+}
+function getUseCaseIds(content) {
+    const section = asRecord(content['3SystemFeaturesAndUseCases']);
+    const nested = section['3.2UseCases'];
+    if (!Array.isArray(nested))
+        return [];
+    return nested
+        .map(item => asRecord(item).id ?? asRecord(item).identifier)
+        .filter((id) => typeof id === 'string' && id.trim().length > 0);
+}
+function parseUnknownIdFromMessage(message, kind) {
+    const pattern = kind === 'stakeholder'
+        ? /unknown stakeholder ID:\s*([A-Za-z0-9-_.]+)/i
+        : /unknown use case ID:\s*([A-Za-z0-9-_.]+)/i;
+    const match = message.match(pattern);
+    return match?.[1] ?? null;
+}
+function parseNumericSuffix(value) {
+    const match = value.match(/(\d+)$/);
+    if (!match)
+        return null;
+    return Number.parseInt(match[1], 10);
+}
+function chooseBestReplacement(invalidId, availableIds) {
+    if (availableIds.length === 0)
+        return null;
+    if (availableIds.includes(invalidId))
+        return invalidId;
+    const invalidPrefix = invalidId.split('-')[0];
+    const samePrefix = availableIds.filter(id => id.split('-')[0] === invalidPrefix);
+    const candidates = samePrefix.length > 0 ? samePrefix : availableIds;
+    const invalidNum = parseNumericSuffix(invalidId);
+    if (invalidNum === null)
+        return candidates[0];
+    let best = candidates[0];
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of candidates) {
+        const candidateNum = parseNumericSuffix(candidate);
+        if (candidateNum === null)
+            continue;
+        const distance = Math.abs(candidateNum - invalidNum);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = candidate;
+        }
+    }
+    return best;
+}
+function replaceInStringArray(value, from, to) {
+    const arr = Array.isArray(value) ? value : [];
+    const replaced = arr.map(item => (item === from ? to : String(item)));
+    return Array.from(new Set(replaced));
+}
+function applyIssueDrivenFixes(content, issues) {
     const fixed = JSON.parse(JSON.stringify(content));
-    // Ensure documentControl exists and has required fields
-    if (!fixed.documentControl) {
-        fixed.documentControl = {};
+    const fixesApplied = [];
+    const functionalRequirements = getFunctionalRequirements(fixed);
+    const stakeholderIds = getStakeholderIds(fixed);
+    const useCaseIds = getUseCaseIds(fixed);
+    for (const issue of issues) {
+        if (issue.code === 'BROKEN_TRACE_STAKEHOLDER' && issue.requirementId) {
+            const invalidId = parseUnknownIdFromMessage(issue.message, 'stakeholder');
+            if (!invalidId)
+                continue;
+            const replacementId = chooseBestReplacement(invalidId, stakeholderIds);
+            if (!replacementId)
+                continue;
+            const requirement = functionalRequirements.find(req => String(req.id) === issue.requirementId);
+            if (!requirement)
+                continue;
+            requirement.traceToStakeholders = replaceInStringArray(requirement.traceToStakeholders, invalidId, replacementId);
+            fixesApplied.push(`Updated ${issue.requirementId} traceToStakeholders: ${invalidId} -> ${replacementId}`);
+        }
+        if (issue.code === 'BROKEN_TRACE_USE_CASE' && issue.requirementId) {
+            const invalidId = parseUnknownIdFromMessage(issue.message, 'use case');
+            if (!invalidId)
+                continue;
+            const replacementId = chooseBestReplacement(invalidId, useCaseIds);
+            if (!replacementId)
+                continue;
+            const requirement = functionalRequirements.find(req => String(req.id) === issue.requirementId);
+            if (!requirement)
+                continue;
+            requirement.traceToUseCases = replaceInStringArray(requirement.traceToUseCases, invalidId, replacementId);
+            fixesApplied.push(`Updated ${issue.requirementId} traceToUseCases: ${invalidId} -> ${replacementId}`);
+        }
     }
-    const dc = fixed.documentControl;
-    dc.documentTitle = dc.documentTitle || 'Software Requirements Specification';
-    dc.projectName = dc.projectName || 'Unnamed Project';
-    dc.documentId = dc.documentId || 'SRS-001';
-    dc.version = dc.version || '1.0';
-    dc.status = dc.status || 'Draft';
-    dc.date = dc.date || new Date().toISOString().split('T')[0];
-    dc.preparedBy = dc.preparedBy || 'AI Generator';
-    dc.reviewedBy = dc.reviewedBy || '';
-    dc.approvedBy = dc.approvedBy || '';
-    // Ensure revisionHistory exists
-    if (!fixed.revisionHistory || !Array.isArray(fixed.revisionHistory)) {
-        fixed.revisionHistory = [
-            {
-                version: dc.version,
-                date: dc.date,
-                author: 'AI Generator',
-                changes: 'Auto-fixed version',
-            },
-        ];
-    }
-    // Ensure tableOfContents exists
-    if (!fixed.tableOfContents) {
-        fixed.tableOfContents = { autoGenerated: true };
-    }
-    // Fix Introduction section
-    if (!fixed['1Introduction']) {
-        fixed['1Introduction'] = {};
-    }
-    const intro = fixed['1Introduction'];
-    intro['1.1Purpose'] = intro['1.1Purpose'] || 'To be defined';
-    intro['1.2Scope'] = intro['1.2Scope'] || 'To be defined';
-    intro['1.3IntendedAudience'] = intro['1.3IntendedAudience'] || [];
-    intro['1.4SystemOverview'] = intro['1.4SystemOverview'] || 'To be defined';
-    intro['1.5DefinitionsAcronymsAbbreviations'] = intro['1.5DefinitionsAcronymsAbbreviations'] || [];
-    intro['1.6References'] = intro['1.6References'] || [];
-    intro['1.7DocumentOverview'] = intro['1.7DocumentOverview'] || 'To be defined';
-    // Fix ContextOfTheSystem section
-    if (!fixed['2ContextOfTheSystem']) {
-        fixed['2ContextOfTheSystem'] = {};
-    }
-    const context = fixed['2ContextOfTheSystem'];
-    context['2.1BusinessContext'] = context['2.1BusinessContext'] || 'To be defined';
-    context['2.2SystemContext'] = context['2.2SystemContext'] || 'To be defined';
-    context['2.3Stakeholders'] = Array.isArray(context['2.3Stakeholders']) ? context['2.3Stakeholders'] : [];
-    context['2.4UserClasses'] = Array.isArray(context['2.4UserClasses']) ? context['2.4UserClasses'] : [];
-    context['2.5OperatingEnvironment'] = context['2.5OperatingEnvironment'] || 'To be defined';
-    context['2.6AssumptionsDependencies'] = Array.isArray(context['2.6AssumptionsDependencies'])
-        ? context['2.6AssumptionsDependencies']
-        : [];
-    context['2.7Constraints'] = Array.isArray(context['2.7Constraints']) ? context['2.7Constraints'] : [];
-    // Fix SystemFeaturesAndUseCases section
-    if (!fixed['3SystemFeaturesAndUseCases']) {
-        fixed['3SystemFeaturesAndUseCases'] = {};
-    }
-    const features = fixed['3SystemFeaturesAndUseCases'];
-    features['3.1MajorSystemFeatures'] = Array.isArray(features['3.1MajorSystemFeatures'])
-        ? features['3.1MajorSystemFeatures']
-        : [];
-    features['3.2UseCases'] = Array.isArray(features['3.2UseCases']) ? features['3.2UseCases'] : [];
-    // Fix FunctionalRequirements section
-    if (!fixed['4FunctionalRequirements']) {
-        fixed['4FunctionalRequirements'] = [];
-    }
-    if (!Array.isArray(fixed['4FunctionalRequirements'])) {
-        fixed['4FunctionalRequirements'] = [];
-    }
-    // Fix NonFunctionalRequirements section
-    if (!fixed['5NonFunctionalRequirements']) {
-        fixed['5NonFunctionalRequirements'] = {};
-    }
-    const nfr = fixed['5NonFunctionalRequirements'];
-    nfr.performanceRequirements = Array.isArray(nfr.performanceRequirements) ? nfr.performanceRequirements : [];
-    nfr.securityRequirements = Array.isArray(nfr.securityRequirements) ? nfr.securityRequirements : [];
-    nfr.usabilityRequirements = Array.isArray(nfr.usabilityRequirements) ? nfr.usabilityRequirements : [];
-    nfr.reliabilityRequirements = Array.isArray(nfr.reliabilityRequirements) ? nfr.reliabilityRequirements : [];
-    nfr.availabilityRequirements = Array.isArray(nfr.availabilityRequirements) ? nfr.availabilityRequirements : [];
-    nfr.maintainabilityRequirements = Array.isArray(nfr.maintainabilityRequirements) ? nfr.maintainabilityRequirements : [];
-    nfr.portabilityRequirements = Array.isArray(nfr.portabilityRequirements) ? nfr.portabilityRequirements : [];
-    nfr.complianceRequirements = Array.isArray(nfr.complianceRequirements) ? nfr.complianceRequirements : [];
-    // Fix ExternalInterfaceRequirements section
-    if (!fixed['6ExternalInterfaceRequirements']) {
-        fixed['6ExternalInterfaceRequirements'] = {};
-    }
-    const ext = fixed['6ExternalInterfaceRequirements'];
-    ext['6.1UserInterfaces'] = Array.isArray(ext['6.1UserInterfaces']) ? ext['6.1UserInterfaces'] : [];
-    ext['6.2HardwareInterfaces'] = Array.isArray(ext['6.2HardwareInterfaces']) ? ext['6.2HardwareInterfaces'] : [];
-    ext['6.3SoftwareInterfaces'] = Array.isArray(ext['6.3SoftwareInterfaces']) ? ext['6.3SoftwareInterfaces'] : [];
-    ext['6.4CommunicationInterfaces'] = Array.isArray(ext['6.4CommunicationInterfaces'])
-        ? ext['6.4CommunicationInterfaces']
-        : [];
-    // Fix DataRequirements section
-    if (!fixed['7DataRequirements']) {
-        fixed['7DataRequirements'] = {};
-    }
-    const data = fixed['7DataRequirements'];
-    data['7.1LogicalDataModel'] = data['7.1LogicalDataModel'] || 'To be defined';
-    data['7.2DataEntities'] = Array.isArray(data['7.2DataEntities']) ? data['7.2DataEntities'] : [];
-    data['7.3DataRetention'] = Array.isArray(data['7.3DataRetention']) ? data['7.3DataRetention'] : [];
-    data['7.4DataValidationRules'] = Array.isArray(data['7.4DataValidationRules']) ? data['7.4DataValidationRules'] : [];
-    // Fix DesignAndImplementationConstraints section
-    if (!fixed['8DesignAndImplementationConstraints']) {
-        fixed['8DesignAndImplementationConstraints'] = [];
-    }
-    if (!Array.isArray(fixed['8DesignAndImplementationConstraints'])) {
-        fixed['8DesignAndImplementationConstraints'] = [];
-    }
-    // Fix VerificationAndAcceptance section
-    if (!fixed['9VerificationAndAcceptance']) {
-        fixed['9VerificationAndAcceptance'] = {};
-    }
-    const verification = fixed['9VerificationAndAcceptance'];
-    verification['9.1AcceptanceCriteria'] = Array.isArray(verification['9.1AcceptanceCriteria'])
-        ? verification['9.1AcceptanceCriteria']
-        : [];
-    verification['9.2VerificationMapping'] = Array.isArray(verification['9.2VerificationMapping'])
-        ? verification['9.2VerificationMapping']
-        : [];
-    // Fix Traceability section
-    if (!fixed['10Traceability']) {
-        fixed['10Traceability'] = {};
-    }
-    const trace = fixed['10Traceability'];
-    trace.stakeholderToRequirements = Array.isArray(trace.stakeholderToRequirements) ? trace.stakeholderToRequirements : [];
-    trace.useCaseToRequirements = Array.isArray(trace.useCaseToRequirements) ? trace.useCaseToRequirements : [];
-    trace.requirementDependencies = Array.isArray(trace.requirementDependencies) ? trace.requirementDependencies : [];
-    // Fix Appendices section
-    if (!fixed['11Appendices']) {
-        fixed['11Appendices'] = {};
-    }
-    const appendices = fixed['11Appendices'];
-    appendices.appendixA = appendices.appendixA || '';
-    appendices.appendixB = appendices.appendixB || '';
-    // Fix QualityCheckSummary section
-    if (!fixed['12QualityCheckSummary']) {
-        fixed['12QualityCheckSummary'] = {};
-    }
-    const summary = fixed['12QualityCheckSummary'];
-    summary.completenessNotes = Array.isArray(summary.completenessNotes) ? summary.completenessNotes : [];
-    summary.ambiguityRisks = Array.isArray(summary.ambiguityRisks) ? summary.ambiguityRisks : [];
-    summary.consistencyRisks = Array.isArray(summary.consistencyRisks) ? summary.consistencyRisks : [];
-    summary.missingTraceLinks = Array.isArray(summary.missingTraceLinks) ? summary.missingTraceLinks : [];
-    summary.assumptionsMade = Array.isArray(summary.assumptionsMade) ? summary.assumptionsMade : [];
-    return fixed;
+    return { fixed, fixesApplied };
 }
 router.post('/auto-fix', async (req, res) => {
     try {
@@ -160,34 +118,31 @@ router.post('/auto-fix', async (req, res) => {
         if (!payload || typeof payload !== 'object') {
             return res.status(400).json({
                 success: false,
-                error: 'Invalid payload: must be a JSON object',
+                error: 'Invalid payload: must be a JSON object.',
             });
         }
-        const { content } = payload;
-        if (!content || typeof content !== 'object') {
+        const content = payload.content;
+        if (!content || typeof content !== 'object' || Array.isArray(content)) {
             return res.status(400).json({
                 success: false,
-                error: 'Invalid content: missing or invalid SRS content',
+                error: 'Invalid content: missing or invalid SRS content object.',
             });
         }
-        // Auto-fix the content
-        const fixedContent = autoFixSRS(content);
-        // Validate the fixed content
-        const validationResult = (0, srsValidator_1.validateSRS)(fixedContent);
-        const issues = validationResult.issues || [];
-        const errorCount = issues.filter((i) => i.severity === 'error').length;
-        const warningCount = issues.filter((i) => i.severity === 'warning').length;
-        const qualityScore = Math.max(0, 100 - errorCount * 10 - warningCount * 5);
+        const incomingIssues = Array.isArray(payload.validation?.issues)
+            ? payload.validation?.issues
+            : Array.isArray(payload.issues)
+                ? payload.issues
+                : [];
+        const issuesToFix = incomingIssues.length > 0
+            ? incomingIssues
+            : (0, srsValidator_1.validateSRS)(content).issues;
+        const { fixed, fixesApplied } = applyIssueDrivenFixes(content, issuesToFix);
+        const validation = (0, srsValidator_1.validateSRS)(fixed);
         return res.json({
             success: true,
-            content: fixedContent,
-            validation: {
-                passed: errorCount === 0,
-                errorCount,
-                warningCount,
-                issues,
-                qualityScore,
-            },
+            content: fixed,
+            fixesApplied,
+            validation,
         });
     }
     catch (error) {

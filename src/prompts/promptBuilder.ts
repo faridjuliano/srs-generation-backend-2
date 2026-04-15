@@ -544,3 +544,31 @@ Rules:
 `;
 }
 
+export function generateRevisionPrompt(srsContent: unknown, instruction: string): string {
+  return `
+You are an expert Requirements Engineer.
+
+TASK:
+Revise the provided SRS JSON based on the user instruction.
+
+USER INSTRUCTION:
+${instruction}
+
+CURRENT SRS JSON:
+${JSON.stringify(srsContent, null, 2)}
+
+RULES:
+- Return VALID JSON only
+- No markdown
+- No code fences
+- Keep the same top-level schema and field names
+- Preserve existing valid sections unless the instruction requires changes
+- Keep IDs consistent and unique
+- Ensure trace links remain valid whenever possible
+- Functional and non-functional requirement statements must begin with "The system shall ..."
+
+OUTPUT:
+Return the fully revised SRS JSON object only.
+`;
+}
+
