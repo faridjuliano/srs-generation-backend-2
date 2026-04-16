@@ -5,6 +5,7 @@ const promptBuilder_1 = require("../prompts/promptBuilder");
 const geminiService_1 = require("../services/geminiService");
 const jsonRepairService_1 = require("../services/jsonRepairService");
 const srsValidator_1 = require("../validators/srsValidator");
+const frNfr_1 = require("../validators/frNfr");
 const router = (0, express_1.Router)();
 const ENABLE_VALIDATION = true;
 const ACTIVE_PROMPT_SET = 'iso-strict';
@@ -178,9 +179,13 @@ router.post('/generate-fr-nfr', async (req, res) => {
                 error: 'Model returned invalid FR/NFR JSON object',
             });
         }
+        const validation = (0, frNfr_1.validateGeneratedRequirements)(parsed);
+        const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
         return res.json({
             success: true,
             content: parsed,
+            validation,
+            autoFixSuggestions,
         });
     }
     catch (error) {
@@ -222,9 +227,13 @@ router.post('/reprompt-fr-nfr', async (req, res) => {
                 error: 'Model returned invalid FR/NFR revised JSON object',
             });
         }
+        const validation = (0, frNfr_1.validateGeneratedRequirements)(revised);
+        const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
         return res.json({
             success: true,
             content: revised,
+            validation,
+            autoFixSuggestions,
         });
     }
     catch (error) {

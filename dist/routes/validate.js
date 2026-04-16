@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const srsValidator_1 = require("../validators/srsValidator");
+const frNfr_1 = require("../validators/frNfr");
 const router = (0, express_1.Router)();
 router.post('/validate', async (req, res) => {
     try {
@@ -42,6 +43,31 @@ router.post('/validate', async (req, res) => {
         return res.status(500).json({
             success: false,
             error: error instanceof Error ? error.message : 'Validation failed',
+        });
+    }
+});
+router.post('/validate-fr-nfr', async (req, res) => {
+    try {
+        const payload = req.body;
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid payload: must be a FR/NFR JSON object',
+            });
+        }
+        const validation = (0, frNfr_1.validateGeneratedRequirements)(payload);
+        const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
+        return res.json({
+            success: true,
+            validation,
+            autoFixSuggestions,
+        });
+    }
+    catch (error) {
+        console.error('FR/NFR validation error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'FR/NFR validation failed',
         });
     }
 });

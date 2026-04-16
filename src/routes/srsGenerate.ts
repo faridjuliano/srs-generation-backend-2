@@ -3,6 +3,7 @@ import { generatePrompt, generateArchitectureDiagramPrompt, generateRevisionProm
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { validateSRS } from '../validators/srsValidator';
+import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 
 const router = Router();
 
@@ -216,9 +217,14 @@ router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
       });
     }
 
+    const validation = validateGeneratedRequirements(parsed as any);
+    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+
     return res.json({
       success: true,
       content: parsed,
+      validation,
+      autoFixSuggestions,
     });
   } catch (error) {
     console.error('FR/NFR generation error:', error);
@@ -265,9 +271,14 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
       });
     }
 
+    const validation = validateGeneratedRequirements(revised as any);
+    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+
     return res.json({
       success: true,
       content: revised,
+      validation,
+      autoFixSuggestions,
     });
   } catch (error) {
     console.error('FR/NFR reprompt error:', error);

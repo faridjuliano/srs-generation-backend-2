@@ -1,0 +1,143 @@
+import {
+  AutoFixSuggestion,
+  GeneratedRequirementsDocument,
+  ValidationConfig,
+  ValidationIssue,
+  ValidationResult,
+} from '../../types/frNfrValidation';
+import { DEFAULT_VALIDATION_CONFIG, NFR_CATEGORIES } from './constants';
+import { buildAutoFixSuggestions } from './autoFixSuggestions';
+import {
+  validateAtomicity,
+  validateConsistency,
+  validateDuplicates,
+  validateFeasibility,
+  validateRequiredFields,
+  validateStatementFormat,
+  validateTraceability,
+  validateVagueWording,
+  validateVerifiability,
+  ValidationContext,
+} from './sharedValidators';
+import { validateFunctionalRequirementRules } from './frValidators';
+import { validateNonFunctionalRequirementRules } from './nfrValidators';
+import { ensureNfrMap, flattenRequirements, getFeatureIdSet, getUseCaseIdSet, mergeValidationConfig } from './utils';
+
+function dedupeIssues(issues: ValidationIssue[]): ValidationIssue[] {
+  const seen = new Set<string>();
+  const output: ValidationIssue[] = [];
+
+  for (const issue of issues) {
+    const key = [
+      issue.requirementId,
+      issue.requirementType,
+      issue.category,
+      issue.field,
+      issue.severity,
+      issue.message,
+      (issue.details?.relatedRequirementIds || []).join(','),
+    ].join('|');
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      output.push(issue);
+    }
+  }
+
+  return output;
+}
+
+function createSummary(totalRequirements: number, issues: ValidationIssue[]): ValidationResult['summary'] {
+  const errors = issues.filter((issue) => issue.severity === 'error').length;
+  const warnings = issues.filter((issue) => issue.severity === 'warning').length;
+
+  return {
+    totalRequirements,
+    totalIssues: issues.length,
+    errors,
+    warnings,
+  };
+}
+
+function normalizeDocument(input: GeneratedRequirementsDocument): GeneratedRequirementsDocument {
+  return {
+    projectName: input.projectName || '',
+    assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
+    constraints: Array.isArray(input.constraints) ? input.constraints : [],
+    features: Array.isArray(input.features) ? input.features : [],
+    useCases: Array.isArray(input.useCases) ? input.useCases : [],
+    functionalRequirements: Array.isArray(input.functionalRequirements) ? input.functionalRequirements : [],
+    nonFunctionalRequirements: ensureNfrMap(input.nonFunctionalRequirements),
+    qualityCheckSummary: {
+      completenessNotes: input.qualityCheckSummary?.completenessNotes || [],
+      ambiguityRisks: input.qualityCheckSummary?.ambiguityRisks || [],
+      consistencyRisks: input.qualityCheckSummary?.consistencyRisks || [],
+      duplicationRisks: input.qualityCheckSummary?.duplicationRisks || [],
+      missingTraceLinks: input.qualityCheckSummary?.missingTraceLinks || [],
+      assumptionsMade: input.qualityCheckSummary?.assumptionsMade || [],
+    },
+  };
+}
+
+function createValidationContext(
+  input: GeneratedRequirementsDocument,
+  config?: Partial<ValidationConfig>,
+): ValidationContext {
+  const safeDocument = normalizeDocument(input);
+  const finalConfig = mergeValidationConfig(config);
+
+  return {
+    document: safeDocument,
+    config: finalConfig,
+    flattenedRequirements: flattenRequirements(safeDocument),
+    featureIds: getFeatureIdSet(safeDocument),
+    useCaseIds: getUseCaseIdSet(safeDocument),
+  };
+}
+
+export function validateGeneratedRequirements(
+  input: GeneratedRequirementsDocument,
+  config?: Partial<ValidationConfig>,
+): ValidationResult {
+  const context = createValidationContext(input, config);
+
+  const issues = dedupeIssues([
+    ...validateRequiredFields(context),
+    ...validateStatementFormat(context),
+    ...validateVagueWording(context),
+    ...validateAtomicity(context),
+    ...validateVerifiability(context),
+    ...validateDuplicates(context),
+    ...validateTraceability(context),
+    ...validateConsistency(context),
+    ...validateFeasibility(context),
+    ...validateFunctionalRequirementRules(context),
+    ...validateNonFunctionalRequirementRules(context),
+  ]);
+
+  const summary = createSummary(context.flattenedRequirements.length, issues);
+
+  return {
+    isValid: summary.errors === 0,
+    summary,
+    issues,
+  };
+}
+
+export function validateRequirements(
+  input: GeneratedRequirementsDocument,
+  config?: Partial<ValidationConfig>,
+): ValidationResult {
+  return validateGeneratedRequirements(input, config);
+}
+
+export function getAutoFixSuggestionsFromValidation(
+  validationResult: ValidationResult,
+): AutoFixSuggestion[] {
+  return buildAutoFixSuggestions(validationResult.issues);
+}
+
+export const FR_NFR_VALIDATOR_SUPPORTED_CATEGORIES = NFR_CATEGORIES;
+export const DEFAULT_FR_NFR_VALIDATION_CONFIG = DEFAULT_VALIDATION_CONFIG;
+
+

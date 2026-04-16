@@ -206,7 +206,7 @@ const openApiSpec = {
       post: {
         tags: ['SRS'],
         summary: 'Generate FR/NFR-only JSON',
-        description: 'Generates only features, use cases, functional requirements, non-functional requirements, and quality summary.',
+        description: 'Generates FR/NFR-focused JSON, validates it automatically, and returns issue-driven auto-fix suggestions.',
         requestBody: {
           required: true,
           content: {
@@ -232,8 +232,13 @@ const openApiSpec = {
                   properties: {
                     success: { type: 'boolean', example: true },
                     content: { type: 'object', additionalProperties: true },
+                    validation: { type: 'object', nullable: true, additionalProperties: true },
+                    autoFixSuggestions: {
+                      type: 'array',
+                      items: { type: 'object', additionalProperties: true },
+                    },
                   },
-                  required: ['success', 'content'],
+                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
@@ -275,7 +280,7 @@ const openApiSpec = {
       post: {
         tags: ['SRS'],
         summary: 'Revise FR/NFR-only JSON using follow-up prompt',
-        description: 'Sends existing FR/NFR-only JSON content and user instruction to Gemini, then returns revised FR/NFR JSON.',
+        description: 'Sends existing FR/NFR-only JSON content and user instruction to Gemini, then returns revised FR/NFR JSON with validation and auto-fix suggestions.',
         requestBody: {
           required: true,
           content: {
@@ -308,8 +313,13 @@ const openApiSpec = {
                   properties: {
                     success: { type: 'boolean', example: true },
                     content: { type: 'object', additionalProperties: true },
+                    validation: { type: 'object', nullable: true, additionalProperties: true },
+                    autoFixSuggestions: {
+                      type: 'array',
+                      items: { type: 'object', additionalProperties: true },
+                    },
                   },
-                  required: ['success', 'content'],
+                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
@@ -468,6 +478,142 @@ const openApiSpec = {
                     error: { type: 'string', example: 'Validation failed' },
                   },
                   required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/srs/validate-fr-nfr': {
+      post: {
+        tags: ['Validation'],
+        summary: 'Validate FR/NFR-only content',
+        description: 'Validates FR/NFR JSON content and returns structured issues plus auto-fix suggestions.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  projectName: { type: 'string', example: 'Clinic Appointment Booking System' },
+                  assumptions: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Users access the system via a web browser'],
+                  },
+                  constraints: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Prototype scope only supports web usage'],
+                  },
+                  features: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                    },
+                  },
+                  useCases: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                    },
+                  },
+                  functionalRequirements: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                    },
+                  },
+                  nonFunctionalRequirements: {
+                    type: 'object',
+                    additionalProperties: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        additionalProperties: true,
+                      },
+                    },
+                  },
+                  qualityCheckSummary: {
+                    type: 'object',
+                    additionalProperties: true,
+                  },
+                },
+                required: ['projectName', 'functionalRequirements', 'nonFunctionalRequirements', 'qualityCheckSummary'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'FR/NFR validation completed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    validation: {
+                      type: 'object',
+                      properties: {
+                        isValid: { type: 'boolean', example: true },
+                        summary: {
+                          type: 'object',
+                          properties: {
+                            totalRequirements: { type: 'integer', example: 2 },
+                            totalIssues: { type: 'integer', example: 1 },
+                            errors: { type: 'integer', example: 0 },
+                            warnings: { type: 'integer', example: 1 },
+                          },
+                          required: ['totalRequirements', 'totalIssues', 'errors', 'warnings'],
+                        },
+                        issues: {
+                          type: 'array',
+                          items: { type: 'object', additionalProperties: true },
+                        },
+                      },
+                      required: ['isValid', 'summary', 'issues'],
+                    },
+                    autoFixSuggestions: {
+                      type: 'array',
+                      items: { type: 'object', additionalProperties: true },
+                    },
+                  },
+                  required: ['success', 'validation', 'autoFixSuggestions'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid payload',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Invalid payload: must be a FR/NFR JSON object' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Validation failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'FR/NFR validation failed' },
+                  },
                 },
               },
             },

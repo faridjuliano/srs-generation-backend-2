@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { validateSRS } from '../validators/srsValidator';
+import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 
 const router = Router();
 
@@ -51,5 +52,32 @@ router.post('/validate', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+router.post('/validate-fr-nfr', async (req: Request, res: Response) => {
+  try {
+    const payload = req.body;
 
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payload: must be a FR/NFR JSON object',
+      });
+    }
+
+    const validation = validateGeneratedRequirements(payload as any);
+    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+
+    return res.json({
+      success: true,
+      validation,
+      autoFixSuggestions,
+    });
+  } catch (error) {
+    console.error('FR/NFR validation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'FR/NFR validation failed',
+    });
+  }
+});
+
+export default router;
