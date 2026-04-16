@@ -202,6 +202,151 @@ const openApiSpec = {
         },
       },
     },
+    '/api/srs/generate-fr-nfr': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Generate FR/NFR-only JSON',
+        description: 'Generates only features, use cases, functional requirements, non-functional requirements, and quality summary.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  projectName: { type: 'string', example: 'Inventory Management System' },
+                  projectVision: { type: 'string', example: 'A web application for tracking stock levels and low inventory alerts.' },
+                },
+                required: ['projectName', 'projectVision'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'FR/NFR content generated successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    content: { type: 'object', additionalProperties: true },
+                  },
+                  required: ['success', 'content'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Missing required fields',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Request body must include a non-empty "projectName" string.' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Generation failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Failed to generate FR/NFR content' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/srs/reprompt-fr-nfr': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Revise FR/NFR-only JSON using follow-up prompt',
+        description: 'Sends existing FR/NFR-only JSON content and user instruction to Gemini, then returns revised FR/NFR JSON.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  content: {
+                    type: 'object',
+                    description: 'Existing FR/NFR JSON object to revise',
+                    additionalProperties: true,
+                  },
+                  instruction: {
+                    type: 'string',
+                    example: 'Add security requirements for MFA and improve performance targets.',
+                  },
+                },
+                required: ['content', 'instruction'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'FR/NFR revised successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    content: { type: 'object', additionalProperties: true },
+                  },
+                  required: ['success', 'content'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid request payload',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Revision failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Failed to revise FR/NFR content' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/srs/validate': {
       post: {
         tags: ['Validation'],

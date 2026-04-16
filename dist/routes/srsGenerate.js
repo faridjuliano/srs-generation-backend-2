@@ -147,4 +147,92 @@ router.post('/reprompt', async (req, res) => {
         });
     }
 });
+router.post('/generate-fr-nfr', async (req, res) => {
+    try {
+        const { projectName, projectVision } = req.body || {};
+        if (typeof projectName !== 'string' || projectName.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a non-empty "projectName" string.',
+            });
+        }
+        if (typeof projectVision !== 'string' || projectVision.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a non-empty "projectVision" string.',
+            });
+        }
+        const prompt = (0, promptBuilder_1.generateFrNfrPrompt)(projectName.trim(), projectVision.trim());
+        const rawText = await (0, geminiService_1.generateWithGemini)(prompt);
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        }
+        catch {
+            const repaired = await (0, jsonRepairService_1.repairJson)(rawText);
+            parsed = JSON.parse(repaired);
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Model returned invalid FR/NFR JSON object',
+            });
+        }
+        return res.json({
+            success: true,
+            content: parsed,
+        });
+    }
+    catch (error) {
+        console.error('FR/NFR generation error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to generate FR/NFR content',
+        });
+    }
+});
+router.post('/reprompt-fr-nfr', async (req, res) => {
+    try {
+        const { content, instruction } = req.body || {};
+        if (!content || typeof content !== 'object' || Array.isArray(content)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a valid "content" object.',
+            });
+        }
+        if (typeof instruction !== 'string' || instruction.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a non-empty "instruction" string.',
+            });
+        }
+        const revisionPrompt = (0, promptBuilder_1.generateFrNfrRevisionPrompt)(content, instruction.trim());
+        const rawText = await (0, geminiService_1.generateWithGemini)(revisionPrompt);
+        let revised;
+        try {
+            revised = JSON.parse(rawText);
+        }
+        catch {
+            const repaired = await (0, jsonRepairService_1.repairJson)(rawText);
+            revised = JSON.parse(repaired);
+        }
+        if (!revised || typeof revised !== 'object' || Array.isArray(revised)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Model returned invalid FR/NFR revised JSON object',
+            });
+        }
+        return res.json({
+            success: true,
+            content: revised,
+        });
+    }
+    catch (error) {
+        console.error('FR/NFR reprompt error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to revise FR/NFR content',
+        });
+    }
+});
 exports.default = router;

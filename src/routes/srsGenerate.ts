@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { generatePrompt, generateArchitectureDiagramPrompt, generateRevisionPrompt } from '../prompts/promptBuilder';
+import { generatePrompt, generateArchitectureDiagramPrompt, generateRevisionPrompt, generateFrNfrPrompt, generateFrNfrRevisionPrompt } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { validateSRS } from '../validators/srsValidator';
@@ -176,6 +176,104 @@ router.post('/reprompt', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to revise SRS',
+    });
+  }
+});
+
+router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
+  try {
+    const { projectName, projectVision } = req.body || {};
+
+    if (typeof projectName !== 'string' || projectName.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "projectName" string.',
+      });
+    }
+
+    if (typeof projectVision !== 'string' || projectVision.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "projectVision" string.',
+      });
+    }
+
+    const prompt = generateFrNfrPrompt(projectName.trim(), projectVision.trim());
+    const rawText = await generateWithGemini(prompt);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      const repaired = await repairJson(rawText);
+      parsed = JSON.parse(repaired);
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Model returned invalid FR/NFR JSON object',
+      });
+    }
+
+    return res.json({
+      success: true,
+      content: parsed,
+    });
+  } catch (error) {
+    console.error('FR/NFR generation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate FR/NFR content',
+    });
+  }
+});
+
+router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
+  try {
+    const { content, instruction } = req.body || {};
+
+    if (!content || typeof content !== 'object' || Array.isArray(content)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a valid "content" object.',
+      });
+    }
+
+    if (typeof instruction !== 'string' || instruction.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "instruction" string.',
+      });
+    }
+
+    const revisionPrompt = generateFrNfrRevisionPrompt(content, instruction.trim());
+    const rawText = await generateWithGemini(revisionPrompt);
+
+    let revised: unknown;
+    try {
+      revised = JSON.parse(rawText);
+    } catch {
+      const repaired = await repairJson(rawText);
+      revised = JSON.parse(repaired);
+    }
+
+    if (!revised || typeof revised !== 'object' || Array.isArray(revised)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Model returned invalid FR/NFR revised JSON object',
+      });
+    }
+
+    return res.json({
+      success: true,
+      content: revised,
+    });
+  } catch (error) {
+    console.error('FR/NFR reprompt error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to revise FR/NFR content',
     });
   }
 });

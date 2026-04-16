@@ -10,40 +10,13 @@ exports.checkMultiActionRequirements = checkMultiActionRequirements;
 exports.checkNearDuplicateRequirements = checkNearDuplicateRequirements;
 exports.calculateQualityScore = calculateQualityScore;
 exports.runValidatorExample = runValidatorExample;
-const VAGUE_TERMS = [
-    'user-friendly',
-    'easy to use',
-    'fast',
-    'efficient',
-    'flexible',
-    'secure enough',
-    'intuitive',
-    'quickly',
-    'appropriate',
-    'as needed',
-    'where possible',
-    'etc.',
-    'and/or'
-];
+const rulesConfig_1 = require("./rulesConfig");
+const VAGUE_TERMS = rulesConfig_1.RULES_CONFIG.vagueTerms;
 const FUNCTIONAL_REQUIRED_FIELDS = [
-    'id',
-    'title',
-    'statement',
-    'rationale',
-    'source',
-    'priority',
-    'fitCriterion',
-    'verificationMethod',
-    'traceToStakeholders',
-    'traceToUseCases'
+    ...rulesConfig_1.RULES_CONFIG.requiredFields.functional,
 ];
 const NON_FUNCTIONAL_REQUIRED_FIELDS = [
-    'id',
-    'statement',
-    'fitCriterion',
-    'verificationMethod',
-    'priority',
-    'source'
+    ...rulesConfig_1.RULES_CONFIG.requiredFields.nonFunctional,
 ];
 function validateSRS(document) {
     const issues = [
@@ -212,13 +185,14 @@ function checkVagueWording(document) {
 }
 function checkMultiActionRequirements(document) {
     const issues = [];
+    const { andCount: andThreshold, semicolonCount: semicolonThreshold, commaCount: commaThreshold } = rulesConfig_1.RULES_CONFIG.multiActionThresholds;
     for (const req of getAllRequirements(document)) {
         const statement = req.statement || '';
         const andCount = countMatches(statement.toLowerCase(), /\band\b/g);
         const semicolonCount = countMatches(statement, /;/g);
         const commaCount = countMatches(statement, /,/g);
         // Heuristic: too many connectors often means multiple atomic requirements in one sentence.
-        const likelyMultiAction = andCount >= 2 || semicolonCount >= 1 || commaCount >= 4;
+        const likelyMultiAction = andCount >= andThreshold || semicolonCount >= semicolonThreshold || commaCount >= commaThreshold;
         if (likelyMultiAction) {
             issues.push({
                 severity: 'warning',
@@ -234,7 +208,7 @@ function checkMultiActionRequirements(document) {
 function checkNearDuplicateRequirements(document) {
     const issues = [];
     const requirements = getAllRequirements(document);
-    const threshold = 0.8;
+    const threshold = rulesConfig_1.RULES_CONFIG.nearDuplicate.similarityThreshold;
     for (let i = 0; i < requirements.length; i += 1) {
         for (let j = i + 1; j < requirements.length; j += 1) {
             const a = requirements[i];
@@ -255,13 +229,13 @@ function checkNearDuplicateRequirements(document) {
     return issues;
 }
 function calculateQualityScore(issues) {
-    const startingScore = 100;
+    const { baseScore, errorPenalty, warningPenalty } = rulesConfig_1.RULES_CONFIG.scoring;
     const penalties = issues.reduce((total, issue) => {
         if (issue.severity === 'error')
-            return total + 8;
-        return total + 3;
+            return total + errorPenalty;
+        return total + warningPenalty;
     }, 0);
-    return Math.max(0, startingScore - penalties);
+    return Math.max(0, baseScore - penalties);
 }
 function getStakeholders(document) {
     if (Array.isArray(document.stakeholders))
