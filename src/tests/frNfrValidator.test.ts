@@ -78,6 +78,7 @@ test('returns valid=true for a minimal well-formed payload', () => {
 
   assert.equal(result.isValid, true);
   assert.equal(result.summary.errors, 0);
+  assert.equal(result.qualityScore, 100);
 });
 
 test('flags custom vague wording terms from ValidationConfig', () => {

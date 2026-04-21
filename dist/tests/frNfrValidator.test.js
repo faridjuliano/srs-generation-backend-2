@@ -78,6 +78,7 @@ function createBaseDocument() {
     const result = (0, frNfr_1.validateGeneratedRequirements)(input);
     strict_1.default.equal(result.isValid, true);
     strict_1.default.equal(result.summary.errors, 0);
+    strict_1.default.equal(result.qualityScore, 100);
 });
 (0, node_test_1.default)('flags custom vague wording terms from ValidationConfig', () => {
     const input = createBaseDocument();

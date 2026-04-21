@@ -59,6 +59,12 @@ function createSummary(totalRequirements: number, issues: ValidationIssue[]): Va
   };
 }
 
+function calculateQualityScore(issues: ValidationIssue[]): number {
+  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+  const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
+  return Math.max(0, 100 - errorCount * 10 - warningCount * 5);
+}
+
 function normalizeDocument(input: GeneratedRequirementsDocument): GeneratedRequirementsDocument {
   return {
     projectName: input.projectName || '',
@@ -120,6 +126,7 @@ export function validateGeneratedRequirements(
   return {
     isValid: summary.errors === 0,
     summary,
+    qualityScore: calculateQualityScore(issues),
     issues,
   };
 }

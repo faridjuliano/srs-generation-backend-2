@@ -892,19 +892,6 @@ FINAL OUTPUT RULES:
 `;
 }
 
-
-
-
-export function generatePrompt(
-  payload: PromptPayload,
-  promptSet: PromptSet = 'default'
-): string {
-  const { projectName, projectVision } = payload;
-  void promptSet;
-
-  return buildIso29148Prompt(projectName, projectVision);
-}
-
 export function generateFrNfrPrompt(projectName: string, projectVision: string): string {
   return buildFrNfrPrompt(projectName, projectVision);
 }
@@ -993,3 +980,13 @@ Return the fully revised SRS JSON object only.
 `;
 }
 
+
+export function generatePrompt(
+  payload: PromptPayload,
+  promptSet: PromptSet = 'default'
+): string {
+  const { projectName, projectVision } = payload;
+  void promptSet;
+
+  return buildIso29148Prompt(projectName, projectVision);
+}

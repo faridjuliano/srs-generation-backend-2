@@ -124,6 +124,7 @@ export interface ValidationSummary {
 export interface ValidationResult {
   isValid: boolean;
   summary: ValidationSummary;
+  qualityScore: number;
   issues: ValidationIssue[];
 }
 

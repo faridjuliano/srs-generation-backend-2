@@ -208,7 +208,7 @@ const openApiSpec = {
             post: {
                 tags: ['SRS'],
                 summary: 'Generate FR/NFR-only JSON',
-                description: 'Generates only features, use cases, functional requirements, non-functional requirements, and quality summary.',
+                description: 'Generates FR/NFR-focused JSON, validates it automatically, and returns issue-driven auto-fix suggestions.',
                 requestBody: {
                     required: true,
                     content: {
@@ -234,8 +234,13 @@ const openApiSpec = {
                                     properties: {
                                         success: { type: 'boolean', example: true },
                                         content: { type: 'object', additionalProperties: true },
+                                        validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
+                                        autoFixSuggestions: {
+                                            type: 'array',
+                                            items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                                        },
                                     },
-                                    required: ['success', 'content'],
+                                    required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                                 },
                             },
                         },
@@ -277,7 +282,7 @@ const openApiSpec = {
             post: {
                 tags: ['SRS'],
                 summary: 'Revise FR/NFR-only JSON using follow-up prompt',
-                description: 'Sends existing FR/NFR-only JSON content and user instruction to Gemini, then returns revised FR/NFR JSON.',
+                description: 'Sends existing FR/NFR-only JSON content and user instruction to Gemini, then returns revised FR/NFR JSON with validation and auto-fix suggestions.',
                 requestBody: {
                     required: true,
                     content: {
@@ -310,8 +315,13 @@ const openApiSpec = {
                                     properties: {
                                         success: { type: 'boolean', example: true },
                                         content: { type: 'object', additionalProperties: true },
+                                        validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
+                                        autoFixSuggestions: {
+                                            type: 'array',
+                                            items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                                        },
                                     },
-                                    required: ['success', 'content'],
+                                    required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                                 },
                             },
                         },
@@ -477,6 +487,73 @@ const openApiSpec = {
                 },
             },
         },
+        '/api/srs/validate-fr-nfr': {
+            post: {
+                tags: ['Validation'],
+                summary: 'Validate FR/NFR-only content',
+                description: 'Validates FR/NFR JSON content and returns structured issues plus auto-fix suggestions.',
+                requestBody: {
+                    required: true,
+                    content: {
+                        'application/json': {
+                            schema: {
+                                $ref: '#/components/schemas/GeneratedRequirementsDocument',
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    '200': {
+                        description: 'FR/NFR validation completed',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        success: { type: 'boolean', example: true },
+                                        validation: { $ref: '#/components/schemas/FrNfrValidationResult' },
+                                        autoFixSuggestions: {
+                                            type: 'array',
+                                            items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                                        },
+                                    },
+                                    required: ['success', 'validation', 'autoFixSuggestions'],
+                                },
+                            },
+                        },
+                    },
+                    '400': {
+                        description: 'Invalid payload',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        success: { type: 'boolean', example: false },
+                                        error: { type: 'string', example: 'Invalid payload: must be a FR/NFR JSON object' },
+                                    },
+                                    required: ['success', 'error'],
+                                },
+                            },
+                        },
+                    },
+                    '500': {
+                        description: 'Validation failed',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        success: { type: 'boolean', example: false },
+                                        error: { type: 'string', example: 'FR/NFR validation failed' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         '/api/srs/auto-fix': {
             post: {
                 tags: ['SRS'],
@@ -614,6 +691,218 @@ const openApiSpec = {
                         },
                     },
                 },
+            },
+        },
+    },
+    components: {
+        schemas: {
+            ValidationIssueDetails: {
+                type: 'object',
+                properties: {
+                    matchedTerms: { type: 'array', items: { type: 'string' } },
+                    relatedRequirementIds: { type: 'array', items: { type: 'string' } },
+                    expected: { type: 'string' },
+                    actual: { type: 'string' },
+                },
+            },
+            ValidationIssue: {
+                type: 'object',
+                properties: {
+                    requirementId: { type: 'string', example: 'FR-001' },
+                    requirementType: { type: 'string', enum: ['FR', 'NFR'], example: 'FR' },
+                    category: {
+                        type: 'string',
+                        enum: [
+                            'missing_field',
+                            'format',
+                            'vague_wording',
+                            'atomicity',
+                            'verifiability',
+                            'duplicate',
+                            'traceability',
+                            'consistency',
+                            'feasibility',
+                            'nfr_category',
+                        ],
+                        example: 'vague_wording',
+                    },
+                    severity: { type: 'string', enum: ['error', 'warning'], example: 'warning' },
+                    field: { type: 'string', example: 'statement' },
+                    message: { type: 'string', example: 'Requirement statement contains vague wording.' },
+                    details: { $ref: '#/components/schemas/ValidationIssueDetails' },
+                    suggestion: { type: 'string', example: 'Replace vague terms with measurable targets.' },
+                },
+                required: ['requirementId', 'requirementType', 'category', 'severity', 'field', 'message'],
+            },
+            ValidationSummary: {
+                type: 'object',
+                properties: {
+                    totalRequirements: { type: 'integer', example: 12 },
+                    totalIssues: { type: 'integer', example: 3 },
+                    errors: { type: 'integer', example: 1 },
+                    warnings: { type: 'integer', example: 2 },
+                },
+                required: ['totalRequirements', 'totalIssues', 'errors', 'warnings'],
+            },
+            FrNfrValidationResult: {
+                type: 'object',
+                properties: {
+                    isValid: { type: 'boolean', example: false },
+                    summary: { $ref: '#/components/schemas/ValidationSummary' },
+                    qualityScore: { type: 'integer', example: 85 },
+                    issues: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/ValidationIssue' },
+                    },
+                },
+                required: ['isValid', 'summary', 'qualityScore', 'issues'],
+            },
+            AutoFixSuggestion: {
+                type: 'object',
+                properties: {
+                    requirementId: { type: 'string', example: 'NFR-PERF-001' },
+                    requirementType: { type: 'string', enum: ['FR', 'NFR'], example: 'NFR' },
+                    category: {
+                        type: 'string',
+                        enum: [
+                            'missing_field',
+                            'format',
+                            'vague_wording',
+                            'atomicity',
+                            'verifiability',
+                            'duplicate',
+                            'traceability',
+                            'consistency',
+                            'feasibility',
+                            'nfr_category',
+                        ],
+                        example: 'verifiability',
+                    },
+                    message: { type: 'string', example: 'Fit criterion is too vague.' },
+                    suggestion: {
+                        type: 'string',
+                        example: 'Add a measurable fit criterion with metric, threshold, and test condition.',
+                    },
+                },
+                required: ['requirementId', 'requirementType', 'category', 'message', 'suggestion'],
+            },
+            GeneratedRequirementsDocument: {
+                type: 'object',
+                properties: {
+                    projectName: { type: 'string', example: 'Clinic Appointment Booking System' },
+                    assumptions: { type: 'array', items: { type: 'string' } },
+                    constraints: { type: 'array', items: { type: 'string' } },
+                    features: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string', example: 'FEAT-001' },
+                                name: { type: 'string', example: 'Appointment Booking' },
+                                description: { type: 'string' },
+                                priority: { type: 'string', example: 'High' },
+                            },
+                            required: ['id', 'name'],
+                        },
+                    },
+                    useCases: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string', example: 'UC-001' },
+                                name: { type: 'string', example: 'Book Appointment' },
+                                goal: { type: 'string' },
+                                primaryActors: { type: 'array', items: { type: 'string' } },
+                                preconditions: { type: 'array', items: { type: 'string' } },
+                                trigger: { type: 'string' },
+                                mainFlow: { type: 'array', items: { type: 'string' } },
+                                postconditions: { type: 'array', items: { type: 'string' } },
+                                relatedFeatures: { type: 'array', items: { type: 'string' } },
+                            },
+                            required: ['id', 'name'],
+                        },
+                    },
+                    functionalRequirements: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string', example: 'FR-001' },
+                                title: { type: 'string' },
+                                statement: { type: 'string', example: 'The system shall allow a patient to book an appointment.' },
+                                category: { type: 'string' },
+                                rationale: { type: 'string' },
+                                source: { type: 'array', items: { type: 'string' } },
+                                priority: { type: 'string' },
+                                fitCriterion: { type: 'string' },
+                                verificationMethod: { type: 'string' },
+                                preconditions: { type: 'array', items: { type: 'string' } },
+                                postconditions: { type: 'array', items: { type: 'string' } },
+                                dependsOn: { type: 'array', items: { type: 'string' } },
+                                conflictsWith: { type: 'array', items: { type: 'string' } },
+                                traceToFeatures: { type: 'array', items: { type: 'string' } },
+                                traceToUseCases: { type: 'array', items: { type: 'string' } },
+                                notes: { type: 'string' },
+                            },
+                            required: ['id', 'title', 'statement', 'rationale', 'source', 'priority', 'fitCriterion', 'verificationMethod'],
+                        },
+                    },
+                    nonFunctionalRequirements: {
+                        type: 'object',
+                        properties: {
+                            performanceRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            securityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            usabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            reliabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            availabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            maintainabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            portabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            scalabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            auditabilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            accessibilityRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            backupRecoveryRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                            complianceRequirements: { type: 'array', items: { $ref: '#/components/schemas/NonFunctionalRequirement' } },
+                        },
+                    },
+                    qualityCheckSummary: {
+                        type: 'object',
+                        properties: {
+                            completenessNotes: { type: 'array', items: { type: 'string' } },
+                            ambiguityRisks: { type: 'array', items: { type: 'string' } },
+                            consistencyRisks: { type: 'array', items: { type: 'string' } },
+                            duplicationRisks: { type: 'array', items: { type: 'string' } },
+                            missingTraceLinks: { type: 'array', items: { type: 'string' } },
+                            assumptionsMade: { type: 'array', items: { type: 'string' } },
+                        },
+                        required: [
+                            'completenessNotes',
+                            'ambiguityRisks',
+                            'consistencyRisks',
+                            'duplicationRisks',
+                            'missingTraceLinks',
+                            'assumptionsMade',
+                        ],
+                    },
+                },
+                required: ['projectName', 'functionalRequirements', 'nonFunctionalRequirements', 'qualityCheckSummary'],
+            },
+            NonFunctionalRequirement: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', example: 'NFR-PERF-001' },
+                    title: { type: 'string' },
+                    statement: { type: 'string' },
+                    rationale: { type: 'string' },
+                    source: { type: 'array', items: { type: 'string' } },
+                    priority: { type: 'string' },
+                    fitCriterion: { type: 'string' },
+                    verificationMethod: { type: 'string' },
+                    traceToFeatures: { type: 'array', items: { type: 'string' } },
+                    traceToUseCases: { type: 'array', items: { type: 'string' } },
+                    notes: { type: 'string' },
+                },
+                required: ['id', 'title', 'statement', 'rationale', 'source', 'priority', 'fitCriterion', 'verificationMethod'],
             },
         },
     },

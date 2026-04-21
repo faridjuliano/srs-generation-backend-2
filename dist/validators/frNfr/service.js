@@ -40,6 +40,11 @@ function createSummary(totalRequirements, issues) {
         warnings,
     };
 }
+function calculateQualityScore(issues) {
+    const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+    const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
+    return Math.max(0, 100 - errorCount * 10 - warningCount * 5);
+}
 function normalizeDocument(input) {
     return {
         projectName: input.projectName || '',
@@ -89,6 +94,7 @@ function validateGeneratedRequirements(input, config) {
     return {
         isValid: summary.errors === 0,
         summary,
+        qualityScore: calculateQualityScore(issues),
         issues,
     };
 }

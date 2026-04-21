@@ -1,10 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generatePrompt = generatePrompt;
 exports.generateFrNfrPrompt = generateFrNfrPrompt;
 exports.generateFrNfrRevisionPrompt = generateFrNfrRevisionPrompt;
 exports.generateArchitectureDiagramPrompt = generateArchitectureDiagramPrompt;
 exports.generateRevisionPrompt = generateRevisionPrompt;
+exports.generatePrompt = generatePrompt;
 function buildIso29148Prompt(projectName, projectVision) {
     return `
 You are an expert Requirements Engineer.
@@ -881,11 +881,6 @@ FINAL OUTPUT RULES:
 - Prefer comprehensive coverage over minimal output, but do not invent unsupported domain facts
 `;
 }
-function generatePrompt(payload, promptSet = 'default') {
-    const { projectName, projectVision } = payload;
-    void promptSet;
-    return buildIso29148Prompt(projectName, projectVision);
-}
 function generateFrNfrPrompt(projectName, projectVision) {
     return buildFrNfrPrompt(projectName, projectVision);
 }
@@ -969,4 +964,9 @@ RULES:
 OUTPUT:
 Return the fully revised SRS JSON object only.
 `;
+}
+function generatePrompt(payload, promptSet = 'default') {
+    const { projectName, projectVision } = payload;
+    void promptSet;
+    return buildIso29148Prompt(projectName, projectVision);
 }
