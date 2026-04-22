@@ -218,6 +218,12 @@ const openApiSpec = {
                                 properties: {
                                     projectName: { type: 'string', example: 'Inventory Management System' },
                                     projectVision: { type: 'string', example: 'A web application for tracking stock levels and low inventory alerts.' },
+                                    validationModel: {
+                                        type: 'string',
+                                        enum: ['rule-based', 'gemini', 'no-validation'],
+                                        example: 'rule-based',
+                                        description: 'Optional validator selection for FR/NFR post-generation validation. Use "no-validation" to skip validation.',
+                                    },
                                 },
                                 required: ['projectName', 'projectVision'],
                             },
@@ -237,6 +243,7 @@ const openApiSpec = {
                                         validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
                                         autoFixSuggestions: {
                                             type: 'array',
+                                            nullable: true,
                                             items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                                         },
                                     },
@@ -299,6 +306,12 @@ const openApiSpec = {
                                         type: 'string',
                                         example: 'Add security requirements for MFA and improve performance targets.',
                                     },
+                                    validationModel: {
+                                        type: 'string',
+                                        enum: ['rule-based', 'gemini', 'no-validation'],
+                                        example: 'rule-based',
+                                        description: 'Optional validator selection for FR/NFR post-revision validation. Use "no-validation" to skip validation.',
+                                    },
                                 },
                                 required: ['content', 'instruction'],
                             },
@@ -318,6 +331,7 @@ const openApiSpec = {
                                         validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
                                         autoFixSuggestions: {
                                             type: 'array',
+                                            nullable: true,
                                             items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                                         },
                                     },
@@ -497,7 +511,20 @@ const openApiSpec = {
                     content: {
                         'application/json': {
                             schema: {
-                                $ref: '#/components/schemas/GeneratedRequirementsDocument',
+                                allOf: [
+                                    { $ref: '#/components/schemas/GeneratedRequirementsDocument' },
+                                    {
+                                        type: 'object',
+                                        properties: {
+                                            validationModel: {
+                                                type: 'string',
+                                                enum: ['rule-based', 'gemini'],
+                                                example: 'rule-based',
+                                                description: 'Optional validator selection for FR/NFR validation.',
+                                            },
+                                        },
+                                    },
+                                ],
                             },
                         },
                     },

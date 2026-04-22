@@ -150,7 +150,7 @@ router.post('/reprompt', async (req, res) => {
 });
 router.post('/generate-fr-nfr', async (req, res) => {
     try {
-        const { projectName, projectVision } = req.body || {};
+        const { projectName, projectVision, validationModel } = req.body || {};
         if (typeof projectName !== 'string' || projectName.trim().length === 0) {
             return res.status(400).json({
                 success: false,
@@ -161,6 +161,15 @@ router.post('/generate-fr-nfr', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error: 'Request body must include a non-empty "projectVision" string.',
+            });
+        }
+        const resolvedValidationModel = validationModel === undefined ? 'rule-based' : validationModel;
+        if (resolvedValidationModel !== 'rule-based'
+            && resolvedValidationModel !== 'gemini'
+            && resolvedValidationModel !== 'no-validation') {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body "validationModel" must be "rule-based", "gemini", or "no-validation".',
             });
         }
         const prompt = (0, promptBuilder_1.generateFrNfrPrompt)(projectName.trim(), projectVision.trim());
@@ -179,8 +188,13 @@ router.post('/generate-fr-nfr', async (req, res) => {
                 error: 'Model returned invalid FR/NFR JSON object',
             });
         }
-        const validation = (0, frNfr_1.validateGeneratedRequirements)(parsed);
-        const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
+        const shouldValidate = resolvedValidationModel !== 'no-validation';
+        const validation = shouldValidate
+            ? await (0, frNfr_1.validateGeneratedRequirements)(parsed, {
+                validationModel: resolvedValidationModel,
+            })
+            : null;
+        const autoFixSuggestions = validation ? (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation) : null;
         return res.json({
             success: true,
             content: parsed,
@@ -198,7 +212,7 @@ router.post('/generate-fr-nfr', async (req, res) => {
 });
 router.post('/reprompt-fr-nfr', async (req, res) => {
     try {
-        const { content, instruction } = req.body || {};
+        const { content, instruction, validationModel } = req.body || {};
         if (!content || typeof content !== 'object' || Array.isArray(content)) {
             return res.status(400).json({
                 success: false,
@@ -209,6 +223,15 @@ router.post('/reprompt-fr-nfr', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error: 'Request body must include a non-empty "instruction" string.',
+            });
+        }
+        const resolvedValidationModel = validationModel === undefined ? 'rule-based' : validationModel;
+        if (resolvedValidationModel !== 'rule-based'
+            && resolvedValidationModel !== 'gemini'
+            && resolvedValidationModel !== 'no-validation') {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body "validationModel" must be "rule-based", "gemini", or "no-validation".',
             });
         }
         const revisionPrompt = (0, promptBuilder_1.generateFrNfrRevisionPrompt)(content, instruction.trim());
@@ -227,8 +250,13 @@ router.post('/reprompt-fr-nfr', async (req, res) => {
                 error: 'Model returned invalid FR/NFR revised JSON object',
             });
         }
-        const validation = (0, frNfr_1.validateGeneratedRequirements)(revised);
-        const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
+        const shouldValidate = resolvedValidationModel !== 'no-validation';
+        const validation = shouldValidate
+            ? await (0, frNfr_1.validateGeneratedRequirements)(revised, {
+                validationModel: resolvedValidationModel,
+            })
+            : null;
+        const autoFixSuggestions = validation ? (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation) : null;
         return res.json({
             success: true,
             content: revised,

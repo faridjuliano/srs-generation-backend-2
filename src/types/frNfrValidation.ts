@@ -2,6 +2,9 @@ export type RequirementType = 'FR' | 'NFR';
 
 export type IssueSeverity = 'error' | 'warning';
 
+export type ValidationModel = 'rule-based' | 'gemini';
+export type FrNfrValidationMode = ValidationModel | 'no-validation';
+
 export type ValidationCategory =
   | 'missing_field'
   | 'format'
@@ -149,6 +152,11 @@ export interface ValidationConfig {
   weakFitCriterionTerms: string[];
   infeasiblePhrases: string[];
   preferredNfrTraceCoverageThreshold: number;
+}
+
+export interface ValidationOptions {
+  validationModel?: ValidationModel;
+  config?: Partial<ValidationConfig>;
 }
 
 export type ValidatorConfig = ValidationConfig;

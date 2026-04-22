@@ -72,20 +72,31 @@ function createBaseDocument(): GeneratedRequirementsDocument {
   };
 }
 
-test('returns valid=true for a minimal well-formed payload', () => {
+test('returns valid=true for a minimal well-formed payload', async () => {
   const input = createBaseDocument();
-  const result = validateGeneratedRequirements(input);
+  const result = await validateGeneratedRequirements(input);
 
   assert.equal(result.isValid, true);
   assert.equal(result.summary.errors, 0);
   assert.equal(result.qualityScore, 100);
 });
 
-test('flags custom vague wording terms from ValidationConfig', () => {
+test('supports gemini validation model when GEMINI_API_KEY is configured', { skip: !process.env.GEMINI_API_KEY }, async () => {
+  const input = createBaseDocument();
+  const result = await validateGeneratedRequirements(input, {
+    validationModel: 'gemini',
+  });
+
+  assert.equal(typeof result.isValid, 'boolean');
+  assert.ok(result.summary.totalRequirements >= 0);
+  assert.ok(result.qualityScore >= 0);
+});
+
+test('flags custom vague wording terms from ValidationConfig', async () => {
   const input = createBaseDocument();
   input.functionalRequirements[0].statement = 'The system shall be snappy and responsive.';
 
-  const result = validateGeneratedRequirements(input, {
+  const result = await validateGeneratedRequirements(input, {
     vagueTerms: ['snappy'],
     duplicateSimilarityThreshold: 0.82,
     minimumStatementLength: 6,
@@ -106,11 +117,11 @@ test('flags custom vague wording terms from ValidationConfig', () => {
   assert.deepEqual(vagueIssue?.details?.matchedTerms, ['snappy']);
 });
 
-test('flags weak verifiability using the configured minimum fitCriterion length', () => {
+test('flags weak verifiability using the configured minimum fitCriterion length', async () => {
   const input = createBaseDocument();
   input.functionalRequirements[0].fitCriterion = 'works correctly';
 
-  const result = validateGeneratedRequirements(input, {
+  const result = await validateGeneratedRequirements(input, {
     vagueTerms: ['user-friendly'],
     duplicateSimilarityThreshold: 0.82,
     minimumStatementLength: 6,
@@ -131,7 +142,7 @@ test('flags weak verifiability using the configured minimum fitCriterion length'
   assert.equal(verifiabilityIssue?.severity, 'error');
 });
 
-test('flags near duplicates when similarity threshold is lowered', () => {
+test('flags near duplicates when similarity threshold is lowered', async () => {
   const input = createBaseDocument();
   input.functionalRequirements.push({
     ...input.functionalRequirements[0],
@@ -140,7 +151,7 @@ test('flags near duplicates when similarity threshold is lowered', () => {
     statement: 'The system shall allow a patient to book an appointment with a doctor.',
   });
 
-  const result = validateGeneratedRequirements(input, {
+  const result = await validateGeneratedRequirements(input, {
     vagueTerms: ['user-friendly'],
     duplicateSimilarityThreshold: 0.2,
     minimumStatementLength: 6,
@@ -161,12 +172,12 @@ test('flags near duplicates when similarity threshold is lowered', () => {
   assert.ok(duplicateIssue?.details?.relatedRequirementIds?.includes('FR-002'));
 });
 
-test('flags vague wording and weak verifiability', () => {
+test('flags vague wording and weak verifiability', async () => {
   const input = createBaseDocument();
   input.functionalRequirements[0].statement = 'The system shall be user-friendly and fast.';
   input.functionalRequirements[0].fitCriterion = 'works correctly';
 
-  const result = validateGeneratedRequirements(input, {
+  const result = await validateGeneratedRequirements(input, {
     vagueTerms: ['user-friendly', 'fast'],
     duplicateSimilarityThreshold: 0.82,
     minimumStatementLength: 6,
@@ -187,7 +198,7 @@ test('flags vague wording and weak verifiability', () => {
   assert.ok(categories.includes('verifiability'));
 });
 
-test('flags broken traceability and duplicate requirements', () => {
+test('flags broken traceability and duplicate requirements', async () => {
   const input = createBaseDocument();
 
   input.functionalRequirements.push({
@@ -197,7 +208,7 @@ test('flags broken traceability and duplicate requirements', () => {
     traceToUseCases: ['UC-999'],
   });
 
-  const result = validateGeneratedRequirements(input);
+  const result = await validateGeneratedRequirements(input);
   const duplicateIssue = result.issues.find((issue) => issue.category === 'duplicate');
   const traceIssue = result.issues.find((issue) => issue.category === 'traceability');
 

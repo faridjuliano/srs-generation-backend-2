@@ -86,7 +86,12 @@ export const exampleFrNfrInput: GeneratedRequirementsDocument = {
   },
 };
 
-export const exampleFrNfrValidationOutput = validateGeneratedRequirements(exampleFrNfrInput);
+export async function buildExampleFrNfrValidationOutput() {
+  return validateGeneratedRequirements(exampleFrNfrInput);
+}
 
-export const exampleAutoFixSuggestions = getAutoFixSuggestionsFromValidation(exampleFrNfrValidationOutput);
+export async function buildExampleAutoFixSuggestions() {
+  const validation = await buildExampleFrNfrValidationOutput();
+  return getAutoFixSuggestionsFromValidation(validation);
+}
 

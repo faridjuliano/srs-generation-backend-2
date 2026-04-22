@@ -73,17 +73,26 @@ function createBaseDocument() {
         },
     };
 }
-(0, node_test_1.default)('returns valid=true for a minimal well-formed payload', () => {
+(0, node_test_1.default)('returns valid=true for a minimal well-formed payload', async () => {
     const input = createBaseDocument();
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input);
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input);
     strict_1.default.equal(result.isValid, true);
     strict_1.default.equal(result.summary.errors, 0);
     strict_1.default.equal(result.qualityScore, 100);
 });
-(0, node_test_1.default)('flags custom vague wording terms from ValidationConfig', () => {
+(0, node_test_1.default)('supports gemini validation model when GEMINI_API_KEY is configured', { skip: !process.env.GEMINI_API_KEY }, async () => {
+    const input = createBaseDocument();
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input, {
+        validationModel: 'gemini',
+    });
+    strict_1.default.equal(typeof result.isValid, 'boolean');
+    strict_1.default.ok(result.summary.totalRequirements >= 0);
+    strict_1.default.ok(result.qualityScore >= 0);
+});
+(0, node_test_1.default)('flags custom vague wording terms from ValidationConfig', async () => {
     const input = createBaseDocument();
     input.functionalRequirements[0].statement = 'The system shall be snappy and responsive.';
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input, {
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input, {
         vagueTerms: ['snappy'],
         duplicateSimilarityThreshold: 0.82,
         minimumStatementLength: 6,
@@ -101,10 +110,10 @@ function createBaseDocument() {
     strict_1.default.ok(vagueIssue);
     strict_1.default.deepEqual(vagueIssue?.details?.matchedTerms, ['snappy']);
 });
-(0, node_test_1.default)('flags weak verifiability using the configured minimum fitCriterion length', () => {
+(0, node_test_1.default)('flags weak verifiability using the configured minimum fitCriterion length', async () => {
     const input = createBaseDocument();
     input.functionalRequirements[0].fitCriterion = 'works correctly';
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input, {
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input, {
         vagueTerms: ['user-friendly'],
         duplicateSimilarityThreshold: 0.82,
         minimumStatementLength: 6,
@@ -122,7 +131,7 @@ function createBaseDocument() {
     strict_1.default.ok(verifiabilityIssue);
     strict_1.default.equal(verifiabilityIssue?.severity, 'error');
 });
-(0, node_test_1.default)('flags near duplicates when similarity threshold is lowered', () => {
+(0, node_test_1.default)('flags near duplicates when similarity threshold is lowered', async () => {
     const input = createBaseDocument();
     input.functionalRequirements.push({
         ...input.functionalRequirements[0],
@@ -130,7 +139,7 @@ function createBaseDocument() {
         title: 'Book appointment in clinic',
         statement: 'The system shall allow a patient to book an appointment with a doctor.',
     });
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input, {
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input, {
         vagueTerms: ['user-friendly'],
         duplicateSimilarityThreshold: 0.2,
         minimumStatementLength: 6,
@@ -148,11 +157,11 @@ function createBaseDocument() {
     strict_1.default.ok(duplicateIssue);
     strict_1.default.ok(duplicateIssue?.details?.relatedRequirementIds?.includes('FR-002'));
 });
-(0, node_test_1.default)('flags vague wording and weak verifiability', () => {
+(0, node_test_1.default)('flags vague wording and weak verifiability', async () => {
     const input = createBaseDocument();
     input.functionalRequirements[0].statement = 'The system shall be user-friendly and fast.';
     input.functionalRequirements[0].fitCriterion = 'works correctly';
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input, {
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input, {
         vagueTerms: ['user-friendly', 'fast'],
         duplicateSimilarityThreshold: 0.82,
         minimumStatementLength: 6,
@@ -171,7 +180,7 @@ function createBaseDocument() {
     strict_1.default.ok(categories.includes('vague_wording'));
     strict_1.default.ok(categories.includes('verifiability'));
 });
-(0, node_test_1.default)('flags broken traceability and duplicate requirements', () => {
+(0, node_test_1.default)('flags broken traceability and duplicate requirements', async () => {
     const input = createBaseDocument();
     input.functionalRequirements.push({
         ...input.functionalRequirements[0],
@@ -179,7 +188,7 @@ function createBaseDocument() {
         traceToFeatures: ['FEAT-404'],
         traceToUseCases: ['UC-999'],
     });
-    const result = (0, frNfr_1.validateGeneratedRequirements)(input);
+    const result = await (0, frNfr_1.validateGeneratedRequirements)(input);
     const duplicateIssue = result.issues.find((issue) => issue.category === 'duplicate');
     const traceIssue = result.issues.find((issue) => issue.category === 'traceability');
     strict_1.default.ok(Boolean(duplicateIssue));

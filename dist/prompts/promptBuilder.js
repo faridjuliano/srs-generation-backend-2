@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateFrNfrPrompt = generateFrNfrPrompt;
 exports.generateFrNfrRevisionPrompt = generateFrNfrRevisionPrompt;
+exports.generateGeminiValidatorPrompt = generateGeminiValidatorPrompt;
 exports.generateArchitectureDiagramPrompt = generateArchitectureDiagramPrompt;
 exports.generateRevisionPrompt = generateRevisionPrompt;
 exports.generatePrompt = generatePrompt;
@@ -881,6 +882,239 @@ FINAL OUTPUT RULES:
 - Prefer comprehensive coverage over minimal output, but do not invent unsupported domain facts
 `;
 }
+function buildGeminiValidatorPrompt(input) {
+    return `
+You are an SRS validation assistant for a thesis project titled:
+“An Automated Generation of Software Requirements Specification using Smart Template-based Approach System”.
+
+Your role is ONLY to validate requirements, not to generate new requirements unless a short suggested revision is requested.
+You must validate ONLY these two requirement types:
+1. Functional Requirements (FR)
+2. Non-Functional Requirements (NFR)
+
+Validation scope:
+- missing required fields
+- vague / weakly verifiable wording cues
+- duplicate or near-duplicate requirements
+- missing trace/source link
+- clarity
+- completeness
+- consistency
+- non-redundancy
+- verifiability
+- traceability
+
+Important constraints:
+- Do NOT perform deep domain correctness validation.
+- Do NOT invent project facts that are not present in the input.
+- If information is missing, mark it as missing instead of guessing.
+- Be strict, specific, and actionable.
+- Return output in valid JSON only.
+- Every requirement must be assessed individually.
+- Also provide an overall score and category scores.
+- Classify findings as: FAIL, WARNING, or PASS.
+- FAIL = serious issue that should be fixed
+- WARNING = issue that may reduce quality but may still be acceptable
+- PASS = acceptable
+
+Scoring model:
+Use a 100-point scale.
+
+Category weights:
+- Usability: 30
+- Correctness: 35
+- Consistency: 35
+
+Map checks into categories as follows:
+Usability:
+- clarity
+- completeness
+- understandable wording
+- simple and readable structure
+
+Correctness:
+- required fields present
+- verifiability
+- appropriate specificity
+- trace/source link present
+- no unsupported or self-contradictory wording within the requirement
+
+Consistency:
+- no duplicates or near-duplicates
+- no conflict with other requirements
+- consistent terminology
+- consistent format/template structure
+
+Severity guidance:
+- Missing ID / actor / action / measurable condition / trace link = usually FAIL
+- Vague wording such as “fast”, “user-friendly”, “etc.”, “as needed”, “if possible”, “should be easy” without measurable criteria = WARNING or FAIL depending on severity
+- Duplicate requirement = FAIL if clearly duplicate, WARNING if near-duplicate
+- Multiple requirements combined into one statement = WARNING or FAIL
+- Non-verifiable NFR = FAIL if no measurable acceptance condition
+- Ambiguous actor, action, object, or condition = WARNING or FAIL
+
+Input format:
+You will receive:
+- project_context
+- template_type
+- requirements[]
+
+Each requirement may contain:
+- id
+- type
+- title
+- description
+- rationale
+- source
+- trace_link
+- priority
+- fit_criterion / acceptance_criteria
+- actor
+- action
+- object
+- condition
+- constraint
+- category
+
+Validation rules:
+1. Functional Requirement minimum expectation:
+   - id
+   - type = FR
+   - clear actor
+   - clear action
+   - clear object/system behavior
+   - optional condition/constraint if relevant
+   - trace_link or source
+   - enough detail to be testable
+
+2. Non-Functional Requirement minimum expectation:
+   - id
+   - type = NFR
+   - quality attribute category if available (performance, security, usability, reliability, etc.)
+   - clear system quality statement
+   - measurable criterion or fit criterion
+   - condition/context if relevant
+   - trace_link or source
+
+3. Detect vague wording cues such as:
+   - easy, simple, quickly, fast, efficient, user-friendly, robust, flexible, appropriate, sufficient, minimal, seamless, intuitive, as soon as possible, if needed, etc.
+   Mark the exact phrase.
+
+4. Detect duplicate or near-duplicate requirements:
+   - compare semantics, not just exact wording
+   - if duplicated, list related requirement IDs
+
+5. Detect missing traceability:
+   - if source or trace_link is missing, flag it
+
+6. Detect poor verifiability:
+   - requirement cannot be objectively tested or measured
+
+7. Detect consistency issues:
+   - conflicting statements
+   - inconsistent terminology
+   - mixed formatting or missing template elements
+
+Output JSON schema:
+{
+  "summary": {
+    "template_type": "FR or NFR",
+    "overall_score": 0,
+    "grade": "Excellent | Good | Fair | Poor",
+    "decision": "PASS_WITH_MINOR_ISSUES | REVISION_NEEDED | REJECTED",
+    "category_scores": {
+      "usability": 0,
+      "correctness": 0,
+      "consistency": 0
+    },
+    "totals": {
+      "requirements_checked": 0,
+      "pass_count": 0,
+      "warning_count": 0,
+      "fail_count": 0
+    }
+  },
+  "requirement_results": [
+    {
+      "id": "FR-01",
+      "type": "FR",
+      "score": 0,
+      "status": "PASS | WARNING | FAIL",
+      "dimension_scores": {
+        "usability": 0,
+        "correctness": 0,
+        "consistency": 0
+      },
+      "issues": [
+        {
+          "severity": "FAIL | WARNING",
+          "rule": "missing_required_field | vague_wording | duplicate | missing_trace | unverifiable | inconsistency | ambiguity | combined_requirement",
+          "message": "Clear explanation of the issue",
+          "evidence": "Quote the problematic phrase or field name",
+          "related_requirement_ids": [],
+          "suggestion": "Concrete revision suggestion"
+        }
+      ],
+      "strengths": [
+        "Specific positive point if any"
+      ],
+      "suggested_revision": "Rewrite only if needed; keep the original intent"
+    }
+  ],
+  "cross_requirement_findings": [
+    {
+      "severity": "WARNING | FAIL",
+      "rule": "duplicate | inconsistency | terminology_conflict",
+      "message": "Cross-requirement issue explanation",
+      "related_requirement_ids": ["FR-01", "FR-03"],
+      "suggestion": "How to resolve it"
+    }
+  ],
+  "final_feedback": {
+    "top_problems_to_fix_first": [
+      "Highest priority issue 1",
+      "Highest priority issue 2",
+      "Highest priority issue 3"
+    ],
+    "revision_advice": [
+      "Short actionable advice 1",
+      "Short actionable advice 2"
+    ]
+  }
+}
+
+Scoring guidance:
+- Start from 100 for each requirement, then deduct points.
+- Suggested deductions:
+  - Missing ID/type: -10
+  - Missing actor/action/object for FR: -15 each when critical
+  - Missing measurable fit criterion for NFR: -20
+  - Missing trace/source link: -15
+  - Strong vague wording: -10 each
+  - Minor vague wording: -5 each
+  - Duplicate/near duplicate: -20
+  - Not testable/verifiable: -20
+  - Multiple requirements combined into one: -10
+  - Inconsistent terminology/format: -5 to -15
+- Keep scores between 0 and 100.
+
+Grade mapping:
+- 85–100 = Excellent
+- 70–84 = Good
+- 50–69 = Fair
+- 0–49 = Poor
+
+Decision mapping:
+- PASS_WITH_MINOR_ISSUES: no FAILs, warnings allowed
+- REVISION_NEEDED: one or more FAILs but still salvageable
+- REJECTED: severely incomplete or unusable set
+
+Now validate the following input strictly.
+
+INPUT:
+${JSON.stringify(input, null, 2)}
+`.trim();
+}
 function generateFrNfrPrompt(projectName, projectVision) {
     return buildFrNfrPrompt(projectName, projectVision);
 }
@@ -911,6 +1145,9 @@ RULES:
 OUTPUT:
 Return the fully revised FR/NFR JSON object only.
 `;
+}
+function generateGeminiValidatorPrompt(input) {
+    return buildGeminiValidatorPrompt(input);
 }
 function generateArchitectureDiagramPrompt(srsContent) {
     return `

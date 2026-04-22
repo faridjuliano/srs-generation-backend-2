@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.exampleAutoFixSuggestions = exports.exampleFrNfrValidationOutput = exports.exampleFrNfrInput = void 0;
+exports.exampleFrNfrInput = void 0;
+exports.buildExampleFrNfrValidationOutput = buildExampleFrNfrValidationOutput;
+exports.buildExampleAutoFixSuggestions = buildExampleAutoFixSuggestions;
 const index_1 = require("./index");
 exports.exampleFrNfrInput = {
     projectName: 'Clinic Appointment Booking System',
@@ -83,5 +85,10 @@ exports.exampleFrNfrInput = {
         assumptionsMade: [],
     },
 };
-exports.exampleFrNfrValidationOutput = (0, index_1.validateGeneratedRequirements)(exports.exampleFrNfrInput);
-exports.exampleAutoFixSuggestions = (0, index_1.getAutoFixSuggestionsFromValidation)(exports.exampleFrNfrValidationOutput);
+async function buildExampleFrNfrValidationOutput() {
+    return (0, index_1.validateGeneratedRequirements)(exports.exampleFrNfrInput);
+}
+async function buildExampleAutoFixSuggestions() {
+    const validation = await buildExampleFrNfrValidationOutput();
+    return (0, index_1.getAutoFixSuggestionsFromValidation)(validation);
+}

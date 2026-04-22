@@ -55,7 +55,17 @@ router.post('/validate-fr-nfr', async (req, res) => {
                 error: 'Invalid payload: must be a FR/NFR JSON object',
             });
         }
-        const validation = (0, frNfr_1.validateGeneratedRequirements)(payload);
+        const validationModel = payload.validationModel;
+        const allowedModels = ['rule-based', 'gemini'];
+        if (validationModel !== undefined && !allowedModels.includes(validationModel)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid validationModel: must be "rule-based" or "gemini".',
+            });
+        }
+        const validation = await (0, frNfr_1.validateGeneratedRequirements)(payload, {
+            validationModel: validationModel || 'rule-based',
+        });
         const autoFixSuggestions = (0, frNfr_1.getAutoFixSuggestionsFromValidation)(validation);
         return res.json({
             success: true,

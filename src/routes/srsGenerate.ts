@@ -4,6 +4,7 @@ import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
+import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidation';
 
 const router = Router();
 
@@ -183,7 +184,7 @@ router.post('/reprompt', async (req: Request, res: Response) => {
 
 router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
   try {
-    const { projectName, projectVision } = req.body || {};
+    const { projectName, projectVision, validationModel } = req.body || {};
 
     if (typeof projectName !== 'string' || projectName.trim().length === 0) {
       return res.status(400).json({
@@ -196,6 +197,18 @@ router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Request body must include a non-empty "projectVision" string.',
+      });
+    }
+
+    const resolvedValidationModel: FrNfrValidationMode = validationModel === undefined ? 'rule-based' : validationModel;
+    if (
+      resolvedValidationModel !== 'rule-based'
+      && resolvedValidationModel !== 'gemini'
+      && resolvedValidationModel !== 'no-validation'
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body "validationModel" must be "rule-based", "gemini", or "no-validation".',
       });
     }
 
@@ -217,8 +230,13 @@ router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
       });
     }
 
-    const validation = validateGeneratedRequirements(parsed as any);
-    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+    const shouldValidate = resolvedValidationModel !== 'no-validation';
+    const validation = shouldValidate
+      ? await validateGeneratedRequirements(parsed as any, {
+          validationModel: resolvedValidationModel as ValidationModel,
+        })
+      : null;
+    const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
 
     return res.json({
       success: true,
@@ -237,7 +255,7 @@ router.post('/generate-fr-nfr', async (req: Request, res: Response) => {
 
 router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
   try {
-    const { content, instruction } = req.body || {};
+    const { content, instruction, validationModel } = req.body || {};
 
     if (!content || typeof content !== 'object' || Array.isArray(content)) {
       return res.status(400).json({
@@ -250,6 +268,18 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Request body must include a non-empty "instruction" string.',
+      });
+    }
+
+    const resolvedValidationModel: FrNfrValidationMode = validationModel === undefined ? 'rule-based' : validationModel;
+    if (
+      resolvedValidationModel !== 'rule-based'
+      && resolvedValidationModel !== 'gemini'
+      && resolvedValidationModel !== 'no-validation'
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body "validationModel" must be "rule-based", "gemini", or "no-validation".',
       });
     }
 
@@ -271,8 +301,13 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
       });
     }
 
-    const validation = validateGeneratedRequirements(revised as any);
-    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+    const shouldValidate = resolvedValidationModel !== 'no-validation';
+    const validation = shouldValidate
+      ? await validateGeneratedRequirements(revised as any, {
+          validationModel: resolvedValidationModel as ValidationModel,
+        })
+      : null;
+    const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
 
     return res.json({
       success: true,

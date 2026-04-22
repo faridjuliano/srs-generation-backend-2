@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
+import type { ValidationModel } from '../types/frNfrValidation';
 
 const router = Router();
 
@@ -63,7 +64,19 @@ router.post('/validate-fr-nfr', async (req: Request, res: Response) => {
       });
     }
 
-    const validation = validateGeneratedRequirements(payload as any);
+    const validationModel = (payload as { validationModel?: string }).validationModel;
+    const allowedModels: ValidationModel[] = ['rule-based', 'gemini'];
+
+    if (validationModel !== undefined && !allowedModels.includes(validationModel as ValidationModel)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid validationModel: must be "rule-based" or "gemini".',
+      });
+    }
+
+    const validation = await validateGeneratedRequirements(payload as any, {
+      validationModel: (validationModel as ValidationModel | undefined) || 'rule-based',
+    });
     const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
 
     return res.json({
