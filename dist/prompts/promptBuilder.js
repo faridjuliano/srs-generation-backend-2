@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.frNfrDetailedPrompt = frNfrDetailedPrompt;
 exports.generateFrNfrPrompt = generateFrNfrPrompt;
 exports.generateFrNfrRevisionPrompt = generateFrNfrRevisionPrompt;
 exports.generateGeminiValidatorPrompt = generateGeminiValidatorPrompt;
@@ -851,6 +852,435 @@ REQUIRED OUTPUT JSON SCHEMA:
         "statement": "The system shall ...",
         "rationale": "string",
         "source": ["Project Description", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Inspection|Analysis|Test",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ]
+  },
+  "qualityCheckSummary": {
+    "completenessNotes": ["string"],
+    "ambiguityRisks": ["string"],
+    "consistencyRisks": ["string"],
+    "duplicationRisks": ["string"],
+    "missingTraceLinks": ["string"],
+    "assumptionsMade": ["string"]
+  }
+}
+
+FINAL OUTPUT RULES:
+- Return JSON only
+- Use the exact field names provided
+- Do not omit any top-level section
+- Include only relevant NFR categories; for irrelevant categories, return an empty array
+- Do not use placeholder text such as "Requirement 1"
+- Ensure all ID references point to valid existing IDs
+- Ensure every FR has rationale, source, fitCriterion, verificationMethod, and trace links
+- Ensure every NFR has rationale, source, fitCriterion, verificationMethod, and trace links when applicable
+- Ensure requirements are specific enough to support later rule-based validation
+- Prefer comprehensive coverage over minimal output, but do not invent unsupported domain facts
+`;
+}
+function frNfrDetailedPrompt(input) {
+    const featuresText = input.features.length > 0
+        ? input.features
+            .map((feature, index) => `${index + 1}. Feature Name: ${feature.name}
+   Description: ${feature.description}`)
+            .join("\n\n")
+        : "None provided.";
+    const constraintsText = input.constraints && input.constraints.length > 0
+        ? input.constraints.map((c, i) => `${i + 1}. ${c}`).join("\n")
+        : "None provided.";
+    const assumptionsText = input.assumptions && input.assumptions.length > 0
+        ? input.assumptions.map((a, i) => `${i + 1}. ${a}`).join("\n")
+        : "None provided.";
+    return `
+You are an expert Requirements Engineer.
+
+TASK:
+Generate ONLY the Functional Requirements (FR) and Non-Functional Requirements (NFR) for a software system.
+
+IMPORTANT SCOPE RULE:
+- The main objective is FR and NFR generation only.
+- However, you must still return the exact JSON schema provided below.
+- Therefore, "features", "useCases", "assumptions", "constraints", and "qualityCheckSummary" must only be generated as supporting structures for FR/NFR generation and traceability.
+- Do NOT generate any other SRS sections outside the required JSON schema.
+
+STANDARD ALIGNMENT:
+Follow the intent of ISO/IEC/IEEE 29148:2018 for high-quality requirements.
+Each requirement must be:
+- necessary
+- appropriate
+- unambiguous
+- complete
+- singular
+- feasible
+- verifiable
+- consistent
+- traceable
+
+PROJECT INPUT:
+- Project Name: ${input.project_name}
+
+PROJECT DESCRIPTION:
+${input.project_description}
+
+INPUT FEATURES:
+${featuresText}
+
+INPUT CONSTRAINTS:
+${constraintsText}
+
+INPUT ASSUMPTIONS:
+${assumptionsText}
+
+FEATURE NORMALIZATION RULE:
+- The input feature list does not include IDs.
+- You must normalize the input features into internal feature objects with sequential IDs:
+  - FEAT-001
+  - FEAT-002
+  - FEAT-003
+  and so on.
+- Preserve the original feature meaning and wording as closely as possible when creating normalized feature entries.
+- Use these generated feature IDs consistently everywhere in the output.
+- Every reference to a feature in use cases and requirements must use the normalized feature ID, not the raw feature name.
+- Specifically:
+  - features[].id must use FEAT-xxx format
+  - useCases[].relatedFeatures must reference valid FEAT-xxx IDs
+  - functionalRequirements[].traceToFeatures must reference valid FEAT-xxx IDs
+  - all nonFunctionalRequirements category items with traceToFeatures must reference valid FEAT-xxx IDs
+- Do not use feature names directly inside trace ID arrays.
+
+OBJECTIVE:
+Produce a structured JSON output containing:
+1. extracted system features that support FR/NFR traceability
+2. inferred use cases that support FR traceability
+3. functional requirements
+4. non-functional requirements
+5. quality check summary for the generated FR/NFR set
+
+The goal is to generate COMPLETE, COMPREHENSIVE, and TESTABLE FR/NFR content only.
+Do NOT generate full SRS sections such as introduction, references, appendices, revision history, stakeholder lists, glossary, external interface chapters, or design sections.
+
+AUTHORING RULES:
+1. Output VALID JSON only.
+2. Do not include markdown, code fences, comments, or explanatory text.
+3. Use formal and precise requirements language.
+4. Every requirement must be atomic, specific, and testable.
+5. Every requirement statement must begin with:
+   "The system shall ..."
+6. Avoid vague terms such as:
+   - user-friendly
+   - fast
+   - efficient
+   - robust
+   - flexible
+   - secure enough
+   - easy to use
+   - reliable
+   unless converted into measurable criteria.
+7. Do not combine multiple requirements into one item.
+8. If information is missing, make conservative assumptions and record them explicitly.
+9. Do not invent domain-specific regulations, integrations, hardware, protocols, or business rules unless clearly implied by the project description, features, constraints, or assumptions.
+10. Ensure internal consistency between features, use cases, FRs, and NFRs.
+11. Keep all IDs unique and correctly formatted.
+12. Prefer realistic requirements over generic placeholders.
+13. Functional requirements must describe system behavior and services.
+14. Non-functional requirements must describe quality attributes or constraints and should be measurable whenever possible.
+15. Every FR should trace to at least one feature or use case.
+16. Every NFR should trace to at least one feature, assumption, constraint, or overall product quality concern where applicable.
+17. If the project description is short, infer only reasonable and minimal assumptions.
+18. Generate only requirements that are reasonably supported by the provided input.
+19. Supporting sections such as features and use cases must remain concise and directly support the FR/NFR output.
+
+INTERNAL GENERATION PROCESS:
+Step 1: Identify and normalize:
+- system purpose
+- user roles
+- major features
+- key business flows
+- assumptions
+- constraints
+- quality concerns
+
+Step 2: Derive candidate use cases from the major features only when useful for FR traceability.
+
+Step 3: Generate Functional Requirements:
+- cover core flows
+- cover input, processing, output, validation, error handling, and permissions where relevant
+- cover CRUD behavior only when clearly needed
+- cover state changes and business rules where implied
+- keep focus on system behavior, not UI design details unless necessary
+
+Step 4: Generate Non-Functional Requirements:
+Include only categories that are relevant to the project.
+Possible categories:
+- performance
+- security
+- usability
+- reliability
+- availability
+- maintainability
+- portability
+- scalability
+- auditability
+- compliance
+- accessibility
+- backup and recovery
+
+Step 5: Perform internal quality review before finalizing:
+- remove duplicates
+- split combined requirements
+- replace vague wording with measurable criteria where possible
+- fix broken trace links
+- ensure each item has rationale, source, and fit criterion
+- ensure no empty required fields unless the schema logically allows an empty array
+
+FUNCTIONAL REQUIREMENTS COMPLETENESS GUIDANCE:
+When appropriate, functional requirements should cover:
+- user authentication / identification
+- role-based access behavior
+- create/read/update/delete actions
+- search/filter/sort
+- workflow steps
+- input validation
+- duplicate prevention
+- error messages / failure handling
+- notifications / confirmations
+- record history / status changes
+- reporting or export
+- admin management capabilities
+Only include these when they are reasonably implied by the input.
+
+NON-FUNCTIONAL REQUIREMENTS GUIDANCE:
+For each relevant NFR:
+- make it measurable where possible
+- include fitCriterion
+- include verificationMethod
+Examples:
+- response time thresholds
+- uptime percentage
+- password/session policy
+- audit logging coverage
+- browser/device support
+- maintainability constraints
+- backup frequency / recovery targets
+- accessibility conformance targets if relevant
+
+REQUIRED OUTPUT JSON SCHEMA:
+{
+  "projectName": "${input.project_name}",
+  "assumptions": [
+    "string"
+  ],
+  "constraints": [
+    "string"
+  ],
+  "features": [
+    {
+      "id": "FEAT-001",
+      "name": "string",
+      "description": "string",
+      "priority": "High|Medium|Low"
+    }
+  ],
+  "useCases": [
+    {
+      "id": "UC-001",
+      "name": "string",
+      "goal": "string",
+      "primaryActors": ["string"],
+      "preconditions": ["string"],
+      "trigger": "string",
+      "mainFlow": ["string"],
+      "postconditions": ["string"],
+      "relatedFeatures": ["FEAT-001"]
+    }
+  ],
+  "functionalRequirements": [
+    {
+      "id": "FR-001",
+      "title": "string",
+      "statement": "The system shall ...",
+      "category": "Authentication|Authorization|Data Management|Validation|Workflow|Reporting|Notification|Administration|Integration|Other",
+      "rationale": "string",
+      "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+      "priority": "High|Medium|Low",
+      "fitCriterion": "string",
+      "verificationMethod": "Test|Inspection|Analysis|Demonstration",
+      "preconditions": ["string"],
+      "postconditions": ["string"],
+      "dependsOn": [],
+      "conflictsWith": [],
+      "traceToFeatures": ["FEAT-001"],
+      "traceToUseCases": ["UC-001"],
+      "notes": ""
+    }
+  ],
+  "nonFunctionalRequirements": {
+    "performanceRequirements": [
+      {
+        "id": "NFR-PERF-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Performance Test|Test|Analysis|Inspection",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "securityRequirements": [
+      {
+        "id": "NFR-SEC-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Security Test|Test|Inspection|Analysis",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "usabilityRequirements": [
+      {
+        "id": "NFR-USA-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Usability Test|Test|Inspection",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "reliabilityRequirements": [
+      {
+        "id": "NFR-REL-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Test|Analysis|Inspection",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "availabilityRequirements": [
+      {
+        "id": "NFR-AVA-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Test|Analysis|Inspection",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "maintainabilityRequirements": [
+      {
+        "id": "NFR-MAI-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Inspection|Analysis|Test",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "portabilityRequirements": [
+      {
+        "id": "NFR-POR-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Test|Inspection",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "scalabilityRequirements": [
+      {
+        "id": "NFR-SCA-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Performance Test|Analysis|Test",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "auditabilityRequirements": [
+      {
+        "id": "NFR-AUD-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Inspection|Test|Analysis",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "accessibilityRequirements": [
+      {
+        "id": "NFR-ACC-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Inspection|Test|Analysis",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "backupRecoveryRequirements": [
+      {
+        "id": "NFR-BAR-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
+        "priority": "High|Medium|Low",
+        "fitCriterion": "string",
+        "verificationMethod": "Test|Inspection|Analysis",
+        "traceToFeatures": ["FEAT-001"],
+        "notes": ""
+      }
+    ],
+    "complianceRequirements": [
+      {
+        "id": "NFR-COM-001",
+        "title": "string",
+        "statement": "The system shall ...",
+        "rationale": "string",
+        "source": ["Project Description", "Feature Input", "Constraint", "Assumption"],
         "priority": "High|Medium|Low",
         "fitCriterion": "string",
         "verificationMethod": "Inspection|Analysis|Test",

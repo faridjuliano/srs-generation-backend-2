@@ -371,6 +371,131 @@ const openApiSpec = {
         },
       },
     },
+    '/api/srs/nf-nfr-detailed': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Generate detailed FR/NFR JSON',
+        description: 'Generates detailed FR/NFR content from structured project inputs, then validates it using the selected validator model.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  project_name: { type: 'string', example: 'Hospital Booking System' },
+                  project_description: {
+                    type: 'string',
+                    example: 'A web-based system for booking, rescheduling, and cancelling doctor appointments.',
+                  },
+                  features: {
+                    type: 'array',
+                    minItems: 1,
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', example: 'Appointment Booking' },
+                        description: { type: 'string', example: 'Patients can book appointments with available doctors.' },
+                      },
+                      required: ['name', 'description'],
+                      minProperties: 2,
+                    },
+                  },
+                  constraints: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Must support 500 concurrent users'],
+                  },
+                  assumptions: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    example: ['Users have stable internet connection'],
+                  },
+                  validator_model: {
+                    type: 'string',
+                    enum: ['rule-based', 'gemini', 'no-validation'],
+                    example: 'rule-based',
+                  },
+                  validator_config: {
+                    type: 'object',
+                    properties: {
+                      strictness: {
+                        type: 'string',
+                        enum: ['low', 'medium', 'high'],
+                        example: 'medium',
+                      },
+                    },
+                  },
+                },
+                required: ['project_name', 'project_description', 'features'],
+                allOf: [
+                  {
+                    type: 'object',
+                    properties: {
+                      project_name: { type: 'string', minLength: 1 },
+                      project_description: { type: 'string', minLength: 1 },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Detailed FR/NFR content generated successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    content: { type: 'object', additionalProperties: true },
+                    validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
+                    autoFixSuggestions: {
+                      type: 'array',
+                      nullable: true,
+                      items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                    },
+                  },
+                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Missing required fields',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Request body must include a non-empty "project_name" string.' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Generation failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Failed to generate detailed FR/NFR content' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/srs/validate': {
       post: {
         tags: ['Validation'],

@@ -272,4 +272,97 @@ router.post('/reprompt-fr-nfr', async (req, res) => {
         });
     }
 });
+router.post('/nf-nfr-detailed', async (req, res) => {
+    try {
+        const { project_name, project_description, features, constraints = [], assumptions = [], } = req.body || {};
+        if (typeof project_name !== 'string' || project_name.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a non-empty "project_name" string.',
+            });
+        }
+        if (typeof project_description !== 'string' || project_description.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a non-empty "project_description" string.',
+            });
+        }
+        if (!Array.isArray(features)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include a "features" array.',
+            });
+        }
+        if (features.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Request body must include at least one feature item in "features".',
+            });
+        }
+        const normalizedFeatures = features.map((feature, index) => {
+            if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
+                return { error: `Feature at index ${index} must be an object with "name" and "description".` };
+            }
+            const name = String(feature.name || '').trim();
+            const description = String(feature.description || '').trim();
+            if (!name || !description) {
+                return { error: `Feature at index ${index} must include non-empty "name" and "description" strings.` };
+            }
+            return { name, description };
+        });
+        const invalidFeature = normalizedFeatures.find((item) => 'error' in item);
+        if (invalidFeature && 'error' in invalidFeature) {
+            return res.status(400).json({
+                success: false,
+                error: invalidFeature.error,
+            });
+        }
+        const validatedFeatures = normalizedFeatures;
+        const detailedPrompt = (0, promptBuilder_1.frNfrDetailedPrompt)({
+            project_name: project_name.trim(),
+            project_description: project_description.trim(),
+            features: validatedFeatures,
+            constraints: Array.isArray(constraints) ? constraints.filter((item) => typeof item === 'string') : [],
+            assumptions: Array.isArray(assumptions) ? assumptions.filter((item) => typeof item === 'string') : [],
+        });
+        const rawText = await (0, geminiService_1.generateWithGemini)(detailedPrompt);
+        let parsed;
+        try {
+            parsed = JSON.parse(rawText);
+        }
+        catch {
+            const repaired = await (0, jsonRepairService_1.repairJson)(rawText);
+            parsed = JSON.parse(repaired);
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Model returned invalid detailed FR/NFR JSON object',
+            });
+        }
+        // TODO: Re-enable detailed FR/NFR validation after prompt/normalization stabilization.
+        // const shouldValidate = resolvedValidationModel !== 'no-validation';
+        // const validation = shouldValidate
+        //   ? await validateGeneratedRequirements(normalizedDetailedOutput as any, {
+        //       validationModel: resolvedValidationModel as ValidationModel,
+        //     })
+        //   : null;
+        // const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
+        const validation = null;
+        const autoFixSuggestions = null;
+        return res.json({
+            success: true,
+            content: parsed,
+            validation,
+            autoFixSuggestions,
+        });
+    }
+    catch (error) {
+        console.error('Detailed FR/NFR generation error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to generate detailed FR/NFR content',
+        });
+    }
+});
 exports.default = router;
