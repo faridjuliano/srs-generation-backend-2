@@ -10,6 +10,7 @@ import {
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
+import { storeGeneratedSrs, retrieveStoredSrs } from '../services/srsStorage';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidation';
@@ -630,8 +631,22 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
     // const validation = null;
     // const autoFixSuggestions = null;
 
+    console.log(parsed,"parsedparsedparsed")
+
+    const storage = await storeGeneratedSrs({
+      projectName: project_name.trim(),
+      kind: 'srs-generation',
+      payload: {
+        // content: normalizedDetailedOutput as Record<string, unknown>,
+        content: parsed as Record<string, unknown>,
+        validation,
+      },
+    });
+
     return res.json({
       success: true,
+      id: storage.id,
+      filePath: storage.filePath,
       content: parsed,
       validation,
       autoFixSuggestions,
@@ -708,6 +723,39 @@ router.post('/reprompt-nf-nfr-detailed', async (req: Request, res: Response) => 
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to revise detailed FR/NFR content',
+    });
+  }
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing or invalid "id" parameter.',
+      });
+    }
+
+    const record = await retrieveStoredSrs(id.trim());
+
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        error: `SRS record with id "${id}" not found.`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      record,
+    });
+  } catch (error) {
+    console.error('SRS retrieval error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to retrieve SRS',
     });
   }
 });

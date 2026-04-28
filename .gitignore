@@ -5,4 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 .idea
+src/database/*.json
+/dist
+.dist
 

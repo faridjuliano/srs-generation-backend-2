@@ -245,7 +245,7 @@ const openApiSpec = {
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                     },
                   },
-                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'id', 'filePath', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
@@ -416,16 +416,6 @@ const openApiSpec = {
                     enum: ['rule-based', 'gemini', 'no-validation'],
                     example: 'rule-based',
                   },
-                  validator_config: {
-                    type: 'object',
-                    properties: {
-                      strictness: {
-                        type: 'string',
-                        enum: ['low', 'medium', 'high'],
-                        example: 'medium',
-                      },
-                    },
-                  },
                 },
                 required: ['project_name', 'project_description', 'features'],
                 allOf: [
@@ -450,6 +440,8 @@ const openApiSpec = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
+                    id: { type: 'string', format: 'uuid', example: '7b4a1f5a-6a6d-4f11-9c48-1a2a3d5b6c7d' },
+                    filePath: { type: 'string', example: '/Users/me/project/src/database/7b4a1f5a-6a6d-4f11-9c48-1a2a3d5b6c7d.json' },
                     content: { type: 'object', additionalProperties: true },
                     validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
                     autoFixSuggestions: {
@@ -458,7 +450,7 @@ const openApiSpec = {
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                     },
                   },
-                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'id', 'filePath', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
