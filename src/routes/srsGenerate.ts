@@ -5,7 +5,7 @@ import {
   generateRevisionPrompt,
   generateFrNfrPrompt,
   generateFrNfrRevisionPrompt,
-  frNfrDetailedPrompt,
+  // frNfrDetailedPrompt,
   frNfrLitePrompt
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
@@ -573,22 +573,22 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       description: feature.description,
     }));
 
-    const detailedPrompt = frNfrDetailedPrompt({
-      project_name: project_name.trim(),
-      project_description: project_description.trim(),
-      features: validatedFeatures,
-      constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
-      assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
-    });
-
-
-    // const detailedPrompt = frNfrLitePrompt({
+    // const detailedPrompt = frNfrDetailedPrompt({
     //   project_name: project_name.trim(),
     //   project_description: project_description.trim(),
     //   features: validatedFeatures,
     //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
     //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
     // });
+
+
+    const detailedPrompt = frNfrLitePrompt({
+      project_name: project_name.trim(),
+      project_description: project_description.trim(),
+      features: validatedFeatures,
+      constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
+      assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
+    });
 
 
     const rawText = await generateWithGemini(detailedPrompt);
@@ -641,6 +641,73 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to generate detailed FR/NFR content',
+    });
+  }
+});
+
+router.post('/reprompt-nf-nfr-detailed', async (req: Request, res: Response) => {
+  try {
+    const { content, instruction } = req.body || {};
+
+    if (!content || typeof content !== 'object' || Array.isArray(content)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a valid "content" object.',
+      });
+    }
+
+    if (typeof instruction !== 'string' || instruction.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "instruction" string.',
+      });
+    }
+
+    // No validationModel / validator_model accepted in this reprompt endpoint.
+    // The server will always run the default validation after revision.
+
+    // The reprompt flow expects a normalized FR/NFR document (same as /reprompt-fr-nfr).
+    // If the caller passes a detailed/raw generator output, ask them to normalize first.
+    const isNormalized = !!(content as any).functionalRequirements || !!(content as any).nonFunctionalRequirements;
+    if (!isNormalized) {
+      return res.status(400).json({
+        success: false,
+        error: 'For detailed reprompt please pass a normalized requirements document (functionalRequirements / nonFunctionalRequirements).',
+      });
+    }
+
+    const revisionPrompt = generateFrNfrRevisionPrompt(content, instruction.trim());
+    const rawText = await generateWithGemini(revisionPrompt);
+
+    let revised: unknown;
+    try {
+      revised = JSON.parse(rawText);
+    } catch {
+      const repaired = await repairJson(rawText);
+      revised = JSON.parse(repaired);
+    }
+
+    if (!revised || typeof revised !== 'object' || Array.isArray(revised)) {
+      return res.status(500).json({
+        success: false,
+        error: 'Model returned invalid FR/NFR revised JSON object',
+      });
+    }
+
+    const validation = await validateGeneratedRequirements(revised as any);
+    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation);
+
+    return res.json({
+      success: true,
+      content: revised,
+      validation,
+      autoFixSuggestions,
+    });
+  } catch (error) {
+    console.error('Detailed FR/NFR reprompt error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to revise detailed FR/NFR content',
     });
   }
 });

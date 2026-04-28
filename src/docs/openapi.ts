@@ -496,6 +496,89 @@ const openApiSpec = {
         },
       },
     },
+    '/api/srs/reprompt-nf-nfr-detailed': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Revise detailed FR/NFR JSON using follow-up prompt',
+        description: 'Sends existing normalized FR/NFR JSON content (functionalRequirements / nonFunctionalRequirements) and user instruction to Gemini, then returns revised FR/NFR JSON with validation and auto-fix suggestions. This reprompt endpoint does not accept validator selection or validator configuration in the request payload.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  content: {
+                    type: 'object',
+                    description: 'Existing normalized FR/NFR JSON object to revise (must include functionalRequirements or nonFunctionalRequirements)',
+                    additionalProperties: true,
+                  },
+                  instruction: {
+                    type: 'string',
+                    example: 'Clarify ambiguous fit criteria and merge duplicate NFRs.',
+                  },
+                  // validationModel / validator_model / validator_config removed from reprompt payload
+                },
+                required: ['content', 'instruction'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Detailed FR/NFR revised successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    content: { type: 'object', additionalProperties: true },
+                    validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
+                    autoFixSuggestions: {
+                      type: 'array',
+                      nullable: true,
+                      items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                    },
+                  },
+                  required: ['success', 'content'],
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid request payload',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Revision failed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: { type: 'string', example: 'Failed to revise detailed FR/NFR content' },
+                  },
+                  required: ['success', 'error'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/srs/validate': {
       post: {
         tags: ['Validation'],
