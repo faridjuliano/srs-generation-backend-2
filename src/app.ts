@@ -6,6 +6,7 @@ import healthRouter from './routes/health';
 import validateRouter from './routes/validate';
 import autoFixRouter from './routes/autoFix';
 import openApiSpec from './docs/openapi';
+import projectRoutes from "./routes/project";
 
 const app = express();
 
@@ -21,5 +22,6 @@ app.use('/api/health', healthRouter);
 app.use('/api/srs', srsGenerateRouter);
 app.use('/api/srs', validateRouter);
 app.use('/api/srs', autoFixRouter);
+app.use("/api/projects", projectRoutes);
 
 export default app;

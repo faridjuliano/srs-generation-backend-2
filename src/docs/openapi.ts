@@ -15,6 +15,7 @@ const openApiSpec = {
     { name: 'Health', description: 'Service availability endpoints' },
     { name: 'SRS', description: 'SRS generation endpoints' },
     { name: 'Validation', description: 'SRS validation endpoints' },
+    { name: 'Projects', description: 'Project persistence and generated SRS storage endpoints' },
   ],
   paths: {
     '/api/health': {
@@ -375,7 +376,7 @@ const openApiSpec = {
       post: {
         tags: ['SRS'],
         summary: 'Generate detailed FR/NFR JSON',
-        description: 'Generates detailed FR/NFR content from structured project inputs, then validates it using the selected validator model.',
+        description: 'Generates detailed FR/NFR content from structured project inputs, validates it using the selected validator model, and stores the generated SRS inside DynamoDB under the current project record.',
         requestBody: {
           required: true,
           content: {
@@ -383,6 +384,8 @@ const openApiSpec = {
               schema: {
                 type: 'object',
                 properties: {
+                  userId: { type: 'string', example: 'user-123' },
+                  projectId: { type: 'string', example: 'proj-456', description: 'Optional. If omitted, the backend generates one.' },
                   project_name: { type: 'string', example: 'Hospital Booking System' },
                   project_description: {
                     type: 'string',
@@ -417,7 +420,7 @@ const openApiSpec = {
                     example: 'rule-based',
                   },
                 },
-                required: ['project_name', 'project_description', 'features'],
+                required: ['userId', 'project_name', 'project_description', 'features'],
                 allOf: [
                   {
                     type: 'object',
@@ -440,8 +443,9 @@ const openApiSpec = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
-                    id: { type: 'string', format: 'uuid', example: '7b4a1f5a-6a6d-4f11-9c48-1a2a3d5b6c7d' },
-                    filePath: { type: 'string', example: '/Users/me/project/src/database/7b4a1f5a-6a6d-4f11-9c48-1a2a3d5b6c7d.json' },
+                    userId: { type: 'string', example: 'user-123' },
+                    projectId: { type: 'string', example: 'proj-456' },
+                    record: { $ref: '#/components/schemas/DynamoProjectRecord' },
                     content: { type: 'object', additionalProperties: true },
                     validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
                     autoFixSuggestions: {
@@ -450,7 +454,7 @@ const openApiSpec = {
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                     },
                   },
-                  required: ['success', 'id', 'filePath', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'userId', 'projectId', 'record', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
@@ -918,6 +922,156 @@ const openApiSpec = {
         },
       },
     },
+    '/api/projects': {
+      post: {
+        tags: ['Projects'],
+        summary: 'Create a project record',
+        description: 'Creates a DynamoDB project record that can later store generated SRS content.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string', example: 'user-123' },
+                  projectId: { type: 'string', example: 'proj-456', description: 'Optional project identifier.' },
+                  projectName: { type: 'string', example: 'Hospital Booking System' },
+                  projectDescription: { type: 'string', example: 'A web-based system for booking, rescheduling, and cancelling doctor appointments.' },
+                  generatedSrs: {
+                    type: 'object',
+                    additionalProperties: true,
+                    description: 'Optional generated SRS payload to persist alongside the project.',
+                  },
+                },
+                required: ['userId', 'projectName'],
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Project created',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/DynamoProjectRecord' },
+                  },
+                  required: ['success', 'data'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/projects/{userId}': {
+      get: {
+        tags: ['Projects'],
+        summary: 'Get a project list by userId',
+        parameters: [
+          {
+            name: 'userId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', example: 'user-123' },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Projects returned',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/DynamoProjectRecord' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/projects/{userId}/{projectId}': {
+      get: {
+        tags: ['Projects'],
+        summary: 'Get a project by userId and projectId',
+        parameters: [
+          { name: 'userId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'projectId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Project returned',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/DynamoProjectRecord' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/projects/{userId}/{projectId}/generated-srs': {
+      patch: {
+        tags: ['Projects'],
+        summary: 'Update generated SRS for a project',
+        parameters: [
+          { name: 'userId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'projectId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  generatedSrs: {
+                    type: 'object',
+                    additionalProperties: true,
+                  },
+                  content: { type: 'object', additionalProperties: true },
+                  validation: { type: 'object', additionalProperties: true },
+                  autoFixSuggestions: { type: 'array', items: { type: 'object' } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Generated SRS updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/DynamoProjectRecord' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   },
   components: {
     schemas: {
@@ -1128,6 +1282,23 @@ const openApiSpec = {
           notes: { type: 'string' },
         },
         required: ['id', 'title', 'statement', 'rationale', 'source', 'priority', 'fitCriterion', 'verificationMethod'],
+      },
+      DynamoProjectRecord: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string', example: 'user-123' },
+          projectId: { type: 'string', example: 'proj-456' },
+          projectName: { type: 'string', example: 'Hospital Booking System' },
+          projectDescription: { type: 'string', nullable: true },
+          generatedSrs: {
+            type: 'object',
+            nullable: true,
+            additionalProperties: true,
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['userId', 'projectId', 'projectName', 'createdAt', 'updatedAt'],
       },
     },
   },

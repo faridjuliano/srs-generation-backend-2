@@ -5,7 +5,7 @@ import {
   generateRevisionPrompt,
   generateFrNfrPrompt,
   generateFrNfrRevisionPrompt,
-  // frNfrDetailedPrompt,
+  frNfrDetailedPrompt,
   frNfrLitePrompt
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
@@ -574,22 +574,22 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       description: feature.description,
     }));
 
-    // const detailedPrompt = frNfrDetailedPrompt({
-    //   project_name: project_name.trim(),
-    //   project_description: project_description.trim(),
-    //   features: validatedFeatures,
-    //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
-    //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
-    // });
-
-
-    const detailedPrompt = frNfrLitePrompt({
+    const detailedPrompt = frNfrDetailedPrompt({
       project_name: project_name.trim(),
       project_description: project_description.trim(),
       features: validatedFeatures,
       constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
       assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
     });
+
+
+    // const detailedPrompt = frNfrLitePrompt({
+    //   project_name: project_name.trim(),
+    //   project_description: project_description.trim(),
+    //   features: validatedFeatures,
+    //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
+    //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
+    // });
 
 
     const rawText = await generateWithGemini(detailedPrompt);
@@ -609,27 +609,21 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       });
     }
 
-    const normalizedDetailedOutput = normalizeDetailedGeneratedOutput(
-      parsed as DetailedGenerationOutput,
-      project_name.trim(),
-      detailedInputFeatures,
-      Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
-      Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
-    );
+    // const normalizedDetailedOutput = normalizeDetailedGeneratedOutput(
+    //   parsed as DetailedGenerationOutput,
+    //   project_name.trim(),
+    //   detailedInputFeatures,
+    //   Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
+    //   Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
+    // );
 
-    // TODO: Re-enable detailed FR/NFR validation after prompt/normalization stabilization.
-    // const shouldValidate = resolvedValidationModel !== 'no-validation';
-    // const validation = shouldValidate
-    //   ? await validateGeneratedRequirements(normalizedDetailedOutput as any, {
-    //       validationModel: resolvedValidationModel as ValidationModel,
-    //     })
-    //   : null;
-    // const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
-
-    const validation = await validateGeneratedRequirements(normalizedDetailedOutput as any)
-    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validation)
-    // const validation = null;
-    // const autoFixSuggestions = null;
+    const shouldValidate = resolvedValidationModel !== 'no-validation';
+    const validation = shouldValidate
+      ? await validateGeneratedRequirements(parsed as any, {
+          validationModel: resolvedValidationModel as ValidationModel,
+        })
+      : null;
+    const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
 
     console.log(parsed,"parsedparsedparsed")
 

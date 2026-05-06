@@ -18,9 +18,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1043.0",
+    "@aws-sdk/lib-dynamodb": "^3.1043.0",
     "@google/generative-ai": "^0.24.1",
     "cors": "^2.8.6",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "swagger-ui-express": "^5.0.1"
   },
