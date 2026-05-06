@@ -1,16 +1,18 @@
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
 import {
   generatePrompt,
   generateArchitectureDiagramPrompt,
   generateRevisionPrompt,
   generateFrNfrPrompt,
   generateFrNfrRevisionPrompt,
-  frNfrDetailedPrompt,
+  // frNfrDetailedPrompt,
   frNfrLitePrompt
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { storeGeneratedSrs, retrieveStoredSrs } from '../services/srsStorage';
+import { createProjectRecord } from '../services/dynamoSrsStorage';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidation';
@@ -18,6 +20,8 @@ import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidat
 const router = Router();
 
 const ENABLE_VALIDATION = true;
+// hardcoded storage mode: 'json' => store only as JSON file; 'dynamo' => store in DynamoDB (and still write JSON file as backup)
+const STORAGE_MODE: 'json' | 'dynamo' = 'dynamo';
 const ACTIVE_PROMPT_SET: 'default' | 'iso-strict' | 'ieee-strict' = 'iso-strict';
 
 type DetailedRequirementItem = {
@@ -36,146 +40,8 @@ type DetailedRequirementItem = {
   category?: string;
 };
 
-type DetailedGenerationOutput = {
-  requirements?: {
-    functional_requirements?: DetailedRequirementItem[];
-    non_functional_requirements?: DetailedRequirementItem[];
-  };
-};
-
 function buildSequentialIds(prefix: string, count: number): string[] {
   return Array.from({ length: count }, (_, index) => `${prefix}-${String(index + 1).padStart(3, '0')}`);
-}
-
-function splitSources(source?: string): string[] {
-  if (!source || source.trim().length === 0) return [];
-  return source.split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
-}
-
-function normalizeDetailedGeneratedOutput(
-  parsed: DetailedGenerationOutput,
-  projectName: string,
-  inputFeatures: Array<{ id: string; name: string; description: string }>,
-  constraints: string[],
-  assumptions: string[],
-): any {
-  const functionalRequirements = parsed.requirements?.functional_requirements || [];
-  const nonFunctionalRequirements = parsed.requirements?.non_functional_requirements || [];
-
-  const featureIndexByName = new Map<string, { id: string; name: string; description: string }>();
-  inputFeatures.forEach((feature) => {
-    featureIndexByName.set(feature.name.trim().toLowerCase(), feature);
-    featureIndexByName.set(feature.description.trim().toLowerCase(), feature);
-  });
-
-  const derivedUseCaseIds = buildSequentialIds('UC', inputFeatures.length);
-  const derivedUseCases = inputFeatures.map((feature, index) => ({
-    id: derivedUseCaseIds[index],
-    name: feature.name,
-    goal: feature.description,
-    primaryActors: [],
-    preconditions: [],
-    trigger: '',
-    mainFlow: [],
-    postconditions: [],
-    relatedFeatures: [feature.id],
-  }));
-
-  const normalizedFunctionalRequirements = functionalRequirements.map((req, index) => {
-    const matchedFeature = req.trace_link
-      ? featureIndexByName.get(req.trace_link.trim().toLowerCase())
-      : undefined;
-    const matchedUseCase = matchedFeature
-      ? derivedUseCases.find((item) => item.relatedFeatures.includes(matchedFeature.id))
-      : undefined;
-
-    const actor = req.actor?.trim() || 'System User';
-    const action = req.action?.trim() || 'perform';
-    const object = req.object?.trim() || req.description?.trim() || 'the requested behavior';
-
-    return {
-      id: req.id?.trim() || `FR-${String(index + 1).padStart(3, '0')}`,
-      title: req.title?.trim() || `${actor} ${action}`,
-      statement: req.description?.trim() || `${actor} shall ${action} ${object}.`,
-      rationale: `Derived from ${matchedFeature?.name || req.source || 'project context'}.`,
-      source: splitSources(req.source).length > 0 ? splitSources(req.source) : [projectName],
-      priority: (req.priority?.trim() || 'Medium') as 'High' | 'Medium' | 'Low',
-      fitCriterion: req.fit_criterion?.trim() || `The requirement is satisfied when ${req.description?.trim() || object} is implemented and verifiable.`,
-      verificationMethod: 'Test',
-      preconditions: req.condition?.trim() ? [req.condition.trim()] : [],
-      postconditions: req.constraint?.trim() ? [req.constraint.trim()] : [],
-      dependsOn: [],
-      conflictsWith: [],
-      traceToFeatures: matchedFeature ? [matchedFeature.id] : [],
-      traceToUseCases: matchedUseCase ? [matchedUseCase.id] : [],
-      notes: '',
-    };
-  });
-
-  const nfrCategoryMap: Record<string, keyof import('../types/frNfrValidation').NonFunctionalRequirementsMap> = {
-    performance: 'performanceRequirements',
-    security: 'securityRequirements',
-    usability: 'usabilityRequirements',
-    reliability: 'reliabilityRequirements',
-    availability: 'availabilityRequirements',
-    maintainability: 'maintainabilityRequirements',
-    scalability: 'scalabilityRequirements',
-    compatibility: 'portabilityRequirements',
-  };
-
-  const normalizedNonFunctionalRequirements: import('../types/frNfrValidation').NonFunctionalRequirementsMap = {
-    performanceRequirements: [],
-    securityRequirements: [],
-    usabilityRequirements: [],
-    reliabilityRequirements: [],
-    availabilityRequirements: [],
-    maintainabilityRequirements: [],
-    portabilityRequirements: [],
-    scalabilityRequirements: [],
-    auditabilityRequirements: [],
-    accessibilityRequirements: [],
-    backupRecoveryRequirements: [],
-    complianceRequirements: [],
-  };
-
-  nonFunctionalRequirements.forEach((req, index) => {
-    const categoryKey = nfrCategoryMap[(req.category || '').trim().toLowerCase()] || 'performanceRequirements';
-    const matchedFeature = req.trace_link
-      ? featureIndexByName.get(req.trace_link.trim().toLowerCase())
-      : undefined;
-
-    normalizedNonFunctionalRequirements[categoryKey].push({
-      id: req.id?.trim() || `NFR-${String(index + 1).padStart(3, '0')}`,
-      title: req.title?.trim() || `${req.category || 'Quality'} requirement`,
-      statement: req.description?.trim() || `The system shall ${req.description?.trim() || 'meet the stated quality attribute'}.`,
-      rationale: `Derived from ${matchedFeature?.name || req.source || 'project context'}.`,
-      source: splitSources(req.source).length > 0 ? splitSources(req.source) : [projectName],
-      priority: 'Medium',
-      fitCriterion: req.fit_criterion?.trim() || `The requirement is satisfied when ${req.description?.trim() || 'the quality attribute'} is verifiable against the project context.`,
-      verificationMethod: 'Test',
-      traceToFeatures: matchedFeature ? [matchedFeature.id] : [],
-      traceToUseCases: matchedFeature ? [derivedUseCases.find((item) => item.relatedFeatures.includes(matchedFeature.id))?.id || ''].filter(Boolean) as string[] : [],
-      notes: '',
-    });
-  });
-
-  return {
-    projectName,
-    assumptions,
-    constraints,
-    features: inputFeatures,
-    useCases: derivedUseCases,
-    functionalRequirements: normalizedFunctionalRequirements,
-    nonFunctionalRequirements: normalizedNonFunctionalRequirements,
-    qualityCheckSummary: {
-      completenessNotes: [],
-      ambiguityRisks: [],
-      consistencyRisks: [],
-      duplicationRisks: [],
-      missingTraceLinks: [],
-      assumptionsMade: [],
-    },
-  };
 }
 
 function enforceCurrentDate(content: Record<string, unknown>): Record<string, unknown> {
@@ -494,6 +360,8 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
 router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
   try {
     const {
+      userId,
+      projectId,
       project_name,
       project_description,
       features,
@@ -567,29 +435,21 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       });
     }
 
-    const detailedFeatureIds = buildSequentialIds('FEAT', validatedFeatures.length);
-    const detailedInputFeatures = validatedFeatures.map((feature, index) => ({
-      id: detailedFeatureIds[index],
-      name: feature.name,
-      description: feature.description,
-    }));
-
-    const detailedPrompt = frNfrDetailedPrompt({
-      project_name: project_name.trim(),
-      project_description: project_description.trim(),
-      features: validatedFeatures,
-      constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
-      assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
-    });
-
-
-    // const detailedPrompt = frNfrLitePrompt({
+    // const detailedPrompt = frNfrDetailedPrompt({
     //   project_name: project_name.trim(),
     //   project_description: project_description.trim(),
     //   features: validatedFeatures,
     //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
     //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
     // });
+
+    const detailedPrompt = frNfrLitePrompt({
+      project_name: project_name.trim(),
+      project_description: project_description.trim(),
+      features: validatedFeatures,
+      constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
+      assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
+    });
 
 
     const rawText = await generateWithGemini(detailedPrompt);
@@ -625,22 +485,71 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       : null;
     const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
 
-    console.log(parsed,"parsedparsedparsed")
+    // Persist generated output depending on STORAGE_MODE.
+    // Always keep the JSON file write so we have a filesystem backup.
+    let fileStorageResult: { id: string; filePath: string } | null = null;
+    let dynamoRecord: any = null;
 
-    const storage = await storeGeneratedSrs({
-      projectName: project_name.trim(),
-      kind: 'srs-generation',
-      payload: {
-        // content: normalizedDetailedOutput as Record<string, unknown>,
-        content: parsed as Record<string, unknown>,
-        validation,
-      },
-    });
+    try {
+      fileStorageResult = await storeGeneratedSrs({
+        projectName: project_name.trim(),
+        kind: 'srs-generation',
+        payload: {
+          // content: normalizedDetailedOutput as Record<string, unknown>,
+          content: parsed as Record<string, unknown>,
+          validation,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to write JSON backup for generated SRS:', err);
+    }
+
+    if (STORAGE_MODE === 'dynamo') {
+      // require a user identifier to store into DynamoDB
+      if (typeof userId !== 'string' || !userId.trim().length) {
+        return res.status(400).json({
+          success: false,
+          error: 'STORAGE_MODE is set to "dynamo" - request body must include a non-empty "userId" string to persist to DynamoDB.',
+        });
+      }
+
+      const finalProjectId = typeof projectId === 'string' && projectId.trim().length > 0
+        ? projectId.trim()
+        : randomUUID();
+
+      try {
+        const userId_trimmed = userId.trim();
+        const projectId_final = finalProjectId;
+        const projectName_final = project_name.trim();
+        const projectDescription_final = project_description.trim();
+        const generatedSrsPayload = {
+          content: parsed as Record<string, unknown>,
+          validation: validation || null,
+          autoFixSuggestions: autoFixSuggestions || null,
+        };
+
+        dynamoRecord = await createProjectRecord({
+          userId: userId_trimmed,
+          projectId: projectId_final,
+          projectName: projectName_final,
+          projectDescription: projectDescription_final,
+          generatedSrs: generatedSrsPayload,
+        });
+      } catch (err) {
+        console.error('Failed to persist generated SRS to DynamoDB:', err);
+        return res.status(500).json({
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to persist to DynamoDB',
+        });
+      }
+    }
 
     return res.json({
       success: true,
-      id: storage.id,
-      filePath: storage.filePath,
+      userId: STORAGE_MODE === 'dynamo' && typeof userId === 'string' ? userId.trim() : undefined,
+      projectId: dynamoRecord?.projectId || undefined,
+      fileStorage: fileStorageResult,
+      dynamoRecord,
       content: parsed,
       validation,
       autoFixSuggestions,

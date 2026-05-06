@@ -375,8 +375,8 @@ const openApiSpec = {
     '/api/srs/nf-nfr-detailed': {
       post: {
         tags: ['SRS'],
-        summary: 'Generate detailed FR/NFR JSON',
-        description: 'Generates detailed FR/NFR content from structured project inputs, validates it using the selected validator model, and stores the generated SRS inside DynamoDB under the current project record.',
+        summary: 'Generate detailed FR/NFR JSON with DynamoDB persistence',
+        description: 'Generates detailed Functional and Non-Functional Requirements from structured project inputs. Validates using the selected validator model. Always writes JSON to filesystem. When STORAGE_MODE is "dynamo", also persists to DynamoDB (requires userId). If projectId is not provided, a UUID is auto-generated.',
         requestBody: {
           required: true,
           content: {
@@ -384,12 +384,13 @@ const openApiSpec = {
               schema: {
                 type: 'object',
                 properties: {
-                  userId: { type: 'string', example: 'user-123' },
-                  projectId: { type: 'string', example: 'proj-456', description: 'Optional. If omitted, the backend generates one.' },
-                  project_name: { type: 'string', example: 'Hospital Booking System' },
+                  userId: { type: 'string', example: 'user-123', description: 'User identifier. Required for DynamoDB storage.' },
+                  projectId: { type: 'string', example: 'proj-456', description: 'Optional project identifier. If omitted, a UUID is auto-generated.' },
+                  project_name: { type: 'string', example: 'Hospital Booking System', description: 'Project name for context.' },
                   project_description: {
                     type: 'string',
                     example: 'A web-based system for booking, rescheduling, and cancelling doctor appointments.',
+                    description: 'Detailed project description to guide FR/NFR generation.',
                   },
                   features: {
                     type: 'array',
@@ -397,27 +398,31 @@ const openApiSpec = {
                     items: {
                       type: 'object',
                       properties: {
-                        name: { type: 'string', example: 'Appointment Booking' },
-                        description: { type: 'string', example: 'Patients can book appointments with available doctors.' },
+                        name: { type: 'string', example: 'Appointment Booking', description: 'Feature name.' },
+                        description: { type: 'string', example: 'Patients can book appointments with available doctors.', description: 'Feature description.' },
                       },
                       required: ['name', 'description'],
                       minProperties: 2,
                     },
+                    description: 'List of project features to generate requirements for.',
                   },
                   constraints: {
                     type: 'array',
                     items: { type: 'string' },
                     example: ['Must support 500 concurrent users'],
+                    description: 'Optional project constraints (e.g., performance, security).',
                   },
                   assumptions: {
                     type: 'array',
                     items: { type: 'string' },
                     example: ['Users have stable internet connection'],
+                    description: 'Optional project assumptions.',
                   },
                   validator_model: {
                     type: 'string',
                     enum: ['rule-based', 'gemini', 'no-validation'],
                     example: 'rule-based',
+                    description: 'Validation model. Defaults to "rule-based".',
                   },
                 },
                 required: ['userId', 'project_name', 'project_description', 'features'],
@@ -436,38 +441,49 @@ const openApiSpec = {
         },
         responses: {
           '200': {
-            description: 'Detailed FR/NFR content generated successfully',
+            description: 'Detailed FR/NFR content generated successfully with optional DynamoDB persistence',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
-                    userId: { type: 'string', example: 'user-123' },
-                    projectId: { type: 'string', example: 'proj-456' },
-                    record: { $ref: '#/components/schemas/DynamoProjectRecord' },
-                    content: { type: 'object', additionalProperties: true },
-                    validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
+                    userId: { type: 'string', example: 'user-123', description: 'Echoed from request when STORAGE_MODE is dynamo', nullable: true },
+                    projectId: { type: 'string', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'Generated or echoed projectId from the stored record', nullable: true },
+                    fileStorage: {
+                      type: 'object',
+                      nullable: true,
+                      description: 'File storage metadata (always attempted, even in dynamo mode)',
+                      properties: {
+                        id: { type: 'string', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', description: 'UUID of the stored JSON file' },
+                        filePath: { type: 'string', example: '/path/to/src/database/a1b2c3d4-e5f6-7890-abcd-ef1234567890.json', description: 'Filesystem path to the stored JSON file' },
+                      },
+                      required: ['id', 'filePath'],
+                    },
+                    dynamoRecord: { $ref: '#/components/schemas/DynamoProjectRecord', nullable: true, description: 'DynamoDB record if STORAGE_MODE is dynamo and persistence succeeds' },
+                    content: { type: 'object', additionalProperties: true, description: 'Generated FR/NFR content from Gemini model' },
+                    validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true, description: 'Validation results if validator_model is not "no-validation"' },
                     autoFixSuggestions: {
                       type: 'array',
                       nullable: true,
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
+                      description: 'Auto-fix suggestions derived from validation results',
                     },
                   },
-                  required: ['success', 'userId', 'projectId', 'record', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'content'],
                 },
               },
             },
           },
           '400': {
-            description: 'Missing required fields',
+            description: 'Invalid request: missing required fields or validation failed',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: false },
-                    error: { type: 'string', example: 'Request body must include a non-empty "project_name" string.' },
+                    error: { type: 'string', example: 'STORAGE_MODE is set to "dynamo" - request body must include a non-empty "userId" string to persist to DynamoDB.' },
                   },
                   required: ['success', 'error'],
                 },
@@ -475,7 +491,7 @@ const openApiSpec = {
             },
           },
           '500': {
-            description: 'Generation failed',
+            description: 'Generation or storage failed',
             content: {
               'application/json': {
                 schema: {
