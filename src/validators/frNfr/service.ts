@@ -227,8 +227,15 @@ function normalizeRequirementType(value?: string, fallback?: RequirementType): R
 function buildValidationResultFromGeminiOutputs(
   outputs: GeminiValidationOutput[],
   context: ValidationContext,
-): ValidationResult {
-  const issues: ValidationIssue[] = [];
+): ValidationResult & {
+  byType?: {
+    FR?: { issues: ValidationIssue[]; summary: ValidationResult['summary']; qualityScore: number };
+    NFR?: { issues: ValidationIssue[]; summary: ValidationResult['summary']; qualityScore: number };
+  };
+} {
+  const allIssues: ValidationIssue[] = [];
+  const frIssues: ValidationIssue[] = [];
+  const nfrIssues: ValidationIssue[] = [];
   let geminiScore: number | null = null;
 
   for (const output of outputs) {
@@ -244,7 +251,7 @@ function buildValidationResultFromGeminiOutputs(
         const severity = mapGeminiSeverityToIssueSeverity(issue.severity);
         if (!severity) continue;
 
-        issues.push({
+        const newIssue: ValidationIssue = {
           requirementId,
           requirementType,
           category: mapGeminiRuleToCategory(issue.rule),
@@ -256,7 +263,14 @@ function buildValidationResultFromGeminiOutputs(
             relatedRequirementIds: issue.related_requirement_ids,
           },
           suggestion: issue.suggestion,
-        });
+        };
+
+        allIssues.push(newIssue);
+        if (requirementType === 'FR') {
+          frIssues.push(newIssue);
+        } else {
+          nfrIssues.push(newIssue);
+        }
       }
     }
 
@@ -266,7 +280,7 @@ function buildValidationResultFromGeminiOutputs(
       const primaryRequirementId = relatedIds[0] || 'CROSS-REQ';
       const inferredType: RequirementType = primaryRequirementId.startsWith('NFR-') ? 'NFR' : 'FR';
 
-      issues.push({
+      const newIssue: ValidationIssue = {
         requirementId: primaryRequirementId,
         requirementType: inferredType,
         category: mapGeminiRuleToCategory(crossFinding.rule),
@@ -277,19 +291,41 @@ function buildValidationResultFromGeminiOutputs(
           relatedRequirementIds: relatedIds,
         },
         suggestion: crossFinding.suggestion,
-      });
+      };
+
+      allIssues.push(newIssue);
+      if (inferredType === 'FR') {
+        frIssues.push(newIssue);
+      } else {
+        nfrIssues.push(newIssue);
+      }
     }
   }
 
-  const dedupedIssues = dedupeIssues(issues);
-  const summary = createSummary(context.flattenedRequirements.length, dedupedIssues);
-  const qualityScore = typeof geminiScore === 'number' ? Math.max(0, Math.min(100, geminiScore)) : calculateQualityScore(dedupedIssues);
+  const dedupedAllIssues = dedupeIssues(allIssues);
+  const dedupedFrIssues = dedupeIssues(frIssues);
+  const dedupedNfrIssues = dedupeIssues(nfrIssues);
+
+  const frCount = context.flattenedRequirements.filter((req) => req.requirementType === 'FR').length;
+  const nfrCount = context.flattenedRequirements.filter((req) => req.requirementType === 'NFR').length;
+
+  const totalSummary = createSummary(context.flattenedRequirements.length, dedupedAllIssues);
+  const frSummary = createSummary(frCount, dedupedFrIssues);
+  const nfrSummary = createSummary(nfrCount, dedupedNfrIssues);
+
+  const totalQualityScore = typeof geminiScore === 'number' ? Math.max(0, Math.min(100, geminiScore)) : calculateQualityScore(dedupedAllIssues);
+  const frQualityScore = calculateQualityScore(dedupedFrIssues);
+  const nfrQualityScore = calculateQualityScore(dedupedNfrIssues);
 
   return {
-    isValid: summary.errors === 0,
-    summary,
-    qualityScore,
-    issues: dedupedIssues,
+    isValid: totalSummary.errors === 0,
+    summary: totalSummary,
+    qualityScore: totalQualityScore,
+    issues: dedupedAllIssues,
+    byType: {
+      FR: { issues: dedupedFrIssues, summary: frSummary, qualityScore: frQualityScore },
+      NFR: { issues: dedupedNfrIssues, summary: nfrSummary, qualityScore: nfrQualityScore },
+    },
   };
 }
 
@@ -308,10 +344,15 @@ async function runGeminiValidation(input: ValidatorInput): Promise<GeminiValidat
 function validateGeneratedRequirementsRuleBased(
   input: GeneratedRequirementsDocument,
   config?: Partial<ValidationConfig>,
-): ValidationResult {
+): ValidationResult & {
+  byType?: {
+    FR?: { issues: ValidationIssue[]; summary: ValidationResult['summary']; qualityScore: number };
+    NFR?: { issues: ValidationIssue[]; summary: ValidationResult['summary']; qualityScore: number };
+  };
+} {
   const context = createValidationContext(input, config);
 
-  const issues = dedupeIssues([
+  const allIssues = [
     ...validateRequiredFields(context),
     ...validateStatementFormat(context),
     ...validateVagueWording(context),
@@ -323,15 +364,32 @@ function validateGeneratedRequirementsRuleBased(
     ...validateFeasibility(context),
     ...validateFunctionalRequirementRules(context),
     ...validateNonFunctionalRequirementRules(context),
-  ]);
+  ];
 
-  const summary = createSummary(context.flattenedRequirements.length, issues);
+  const dedupedAllIssues = dedupeIssues(allIssues);
+  const frIssues = dedupedAllIssues.filter((issue) => issue.requirementType === 'FR');
+  const nfrIssues = dedupedAllIssues.filter((issue) => issue.requirementType === 'NFR');
+
+  const frCount = context.flattenedRequirements.filter((req) => req.requirementType === 'FR').length;
+  const nfrCount = context.flattenedRequirements.filter((req) => req.requirementType === 'NFR').length;
+
+  const totalSummary = createSummary(context.flattenedRequirements.length, dedupedAllIssues);
+  const frSummary = createSummary(frCount, frIssues);
+  const nfrSummary = createSummary(nfrCount, nfrIssues);
+
+  const totalQualityScore = calculateQualityScore(dedupedAllIssues);
+  const frQualityScore = calculateQualityScore(frIssues);
+  const nfrQualityScore = calculateQualityScore(nfrIssues);
 
   return {
-    isValid: summary.errors === 0,
-    summary,
-    qualityScore: calculateQualityScore(issues),
-    issues,
+    isValid: totalSummary.errors === 0,
+    summary: totalSummary,
+    qualityScore: totalQualityScore,
+    issues: dedupedAllIssues,
+    byType: {
+      FR: { issues: frIssues, summary: frSummary, qualityScore: frQualityScore },
+      NFR: { issues: nfrIssues, summary: nfrSummary, qualityScore: nfrQualityScore },
+    },
   };
 }
 

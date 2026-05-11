@@ -6,8 +6,8 @@ import {
   generateRevisionPrompt,
   generateFrNfrPrompt,
   generateFrNfrRevisionPrompt,
-  // frNfrDetailedPrompt,
-  frNfrLitePrompt
+  frNfrDetailedPrompt,
+  // frNfrLitePrompt
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
@@ -16,6 +16,7 @@ import { createProjectRecord } from '../services/dynamoSrsStorage';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidation';
+import {convertFR, convertNFR} from "../utils/contentParser";
 
 const router = Router();
 
@@ -23,26 +24,6 @@ const ENABLE_VALIDATION = true;
 // hardcoded storage mode: 'json' => store only as JSON file; 'dynamo' => store in DynamoDB (and still write JSON file as backup)
 const STORAGE_MODE: 'json' | 'dynamo' = 'dynamo';
 const ACTIVE_PROMPT_SET: 'default' | 'iso-strict' | 'ieee-strict' = 'iso-strict';
-
-type DetailedRequirementItem = {
-  id?: string;
-  title?: string;
-  description?: string;
-  actor?: string;
-  action?: string;
-  object?: string;
-  condition?: string;
-  constraint?: string;
-  priority?: string;
-  source?: string;
-  trace_link?: string;
-  fit_criterion?: string;
-  category?: string;
-};
-
-function buildSequentialIds(prefix: string, count: number): string[] {
-  return Array.from({ length: count }, (_, index) => `${prefix}-${String(index + 1).padStart(3, '0')}`);
-}
 
 function enforceCurrentDate(content: Record<string, unknown>): Record<string, unknown> {
   const today = new Date().toISOString().slice(0, 10);
@@ -63,6 +44,26 @@ function enforceCurrentDate(content: Record<string, unknown>): Record<string, un
 
   return content;
 }
+
+const handlePrediction = (async (content: any) => {
+  try {
+    const nfr = convertNFR(content)
+    const fr = convertFR(content)
+    const predictUrl = process.env.PREDICT_API_URL + "predict";
+    const Pred = await fetch(predictUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([...fr, ...nfr]),
+    });
+
+    const rawBody = await Pred.text();
+    return JSON.parse(rawBody);
+  } catch (error) {
+    console.error('Predict proxy error:', error);
+  }
+})
 
 router.post('/generate', async (req: Request, res: Response) => {
   try {
@@ -357,7 +358,7 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
+router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
   try {
     const {
       userId,
@@ -435,21 +436,21 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
       });
     }
 
-    // const detailedPrompt = frNfrDetailedPrompt({
-    //   project_name: project_name.trim(),
-    //   project_description: project_description.trim(),
-    //   features: validatedFeatures,
-    //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
-    //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
-    // });
-
-    const detailedPrompt = frNfrLitePrompt({
+    const detailedPrompt = frNfrDetailedPrompt({
       project_name: project_name.trim(),
       project_description: project_description.trim(),
       features: validatedFeatures,
       constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
       assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
     });
+
+    // const detailedPrompt = frNfrLitePrompt({
+    //   project_name: project_name.trim(),
+    //   project_description: project_description.trim(),
+    //   features: validatedFeatures,
+    //   constraints: Array.isArray(constraints) ? constraints.filter((item): item is string => typeof item === 'string') : [],
+    //   assumptions: Array.isArray(assumptions) ? assumptions.filter((item): item is string => typeof item === 'string') : [],
+    // });
 
 
     const rawText = await generateWithGemini(detailedPrompt);
@@ -484,27 +485,31 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
         })
       : null;
     const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
+    const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
 
-    // Persist generated output depending on STORAGE_MODE.
-    // Always keep the JSON file write so we have a filesystem backup.
     let fileStorageResult: { id: string; filePath: string } | null = null;
     let dynamoRecord: any = null;
 
-    try {
-      fileStorageResult = await storeGeneratedSrs({
-        projectName: project_name.trim(),
-        kind: 'srs-generation',
-        payload: {
-          // content: normalizedDetailedOutput as Record<string, unknown>,
-          content: parsed as Record<string, unknown>,
-          validation,
-        },
-      });
-    } catch (err) {
-      console.error('Failed to write JSON backup for generated SRS:', err);
-    }
-
-    if (STORAGE_MODE === 'dynamo') {
+    // @ts-ignore
+    if (STORAGE_MODE === 'json') {
+      try {
+        fileStorageResult = await storeGeneratedSrs({
+          projectName: project_name.trim(),
+          kind: 'srs-generation',
+          payload: {
+            // content: normalizedDetailedOutput as Record<string, unknown>,
+            content: parsed as Record<string, unknown>,
+            validation,
+          },
+        });
+      } catch (err) {
+        console.error('Failed to write JSON file for generated SRS:', err);
+        return res.status(500).json({
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to persist to JSON storage',
+        });
+      }
+    } else {
       // require a user identifier to store into DynamoDB
       if (typeof userId !== 'string' || !userId.trim().length) {
         return res.status(400).json({
@@ -522,8 +527,10 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
         const projectId_final = finalProjectId;
         const projectName_final = project_name.trim();
         const projectDescription_final = project_description.trim();
+
         const generatedSrsPayload = {
           content: parsed as Record<string, unknown>,
+          prediction: MLPrediction,
           validation: validation || null,
           autoFixSuggestions: autoFixSuggestions || null,
         };
@@ -546,13 +553,16 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      userId: STORAGE_MODE === 'dynamo' && typeof userId === 'string' ? userId.trim() : undefined,
-      projectId: dynamoRecord?.projectId || undefined,
-      fileStorage: fileStorageResult,
-      dynamoRecord,
-      content: parsed,
-      validation,
-      autoFixSuggestions,
+      ...dynamoRecord
+      // success: true,
+      // userId: STORAGE_MODE === 'dynamo' && typeof userId === 'string' ? userId.trim() : undefined,
+      // projectId: dynamoRecord?.projectId || undefined,
+      //  fileStorage: fileStorageResult,
+      // dynamoRecord,
+      // content: parsed,
+      // validation,
+      // autoFixSuggestions,
+      // prediction: MLPrediction
     });
   } catch (error) {
     console.error('Detailed FR/NFR generation error:', error);
@@ -563,7 +573,7 @@ router.post('/nf-nfr-detailed', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/reprompt-nf-nfr-detailed', async (req: Request, res: Response) => {
+router.post('/reprompt-fr-nfr-detailed', async (req: Request, res: Response) => {
   try {
     const { content, instruction } = req.body || {};
 
