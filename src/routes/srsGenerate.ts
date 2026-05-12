@@ -358,8 +358,405 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
   }
 });
 
+const mock_return: boolean = false;
+
+const mockDetailedFrNfrResponse = {
+  "success": true,
+  "data": {
+    "projectDescription": "A web-based system for booking, rescheduling, and cancelling doctor appointments.",
+    "userId": "user-001",
+    "updatedAt": "2026-05-12T08:19:27.591Z",
+    "createdAt": "2026-05-12T08:19:27.591Z",
+    "projectName": "Hospital Booking System",
+    "generatedSrs": {
+      "content": {
+        "functionalRequirements": [
+          {
+            "preconditions": [
+              "User is logged in as patient"
+            ],
+            "rationale": "Required for patients to initiate the booking process.",
+            "source": [
+              "Feature Input"
+            ],
+            "postconditions": [
+              "Search criteria results displayed"
+            ],
+            "dependsOn": [],
+            "conflictsWith": [],
+            "fitCriterion": "The system returns search results within 2 seconds for a query.",
+            "statement": "The system shall allow patients to query available doctor slots based on date and doctor ID.",
+            "verificationMethod": "Test",
+            "id": "FR-001",
+            "title": "Search Available Slots",
+            "traceToConstraints": [],
+            "traceToFeatures": [
+              "FEAT-001"
+            ],
+            "category": "Data Management",
+            "priority": "High",
+            "traceToAssumptions": [
+              "ASM-002"
+            ],
+            "notes": ""
+          },
+          {
+            "rationale": "Primary function of the booking system.",
+            "traceToConstraints": [],
+            "source": [
+              "Feature Input"
+            ],
+            "verificationMethod": "Inspection",
+            "id": "FR-002",
+            "title": "Create Appointment",
+            "traceToAssumptions": [],
+            "category": "Workflow",
+            "traceToFeatures": [
+              "FEAT-001"
+            ],
+            "postconditions": [
+              "Appointment status set to booked"
+            ],
+            "notes": "",
+            "statement": "The system shall create an appointment record linked to a specific patient and doctor.",
+            "dependsOn": [
+              "FR-001"
+            ],
+            "conflictsWith": [],
+            "priority": "High",
+            "preconditions": [
+              "Slot is available"
+            ],
+            "fitCriterion": "Database contains the new appointment record with status 'Booked'."
+          },
+          {
+            "preconditions": [
+              "Appointment exists"
+            ],
+            "priority": "High",
+            "statement": "The system shall allow patients to update the date or cancel an existing appointment.",
+            "verificationMethod": "Test",
+            "traceToConstraints": [],
+            "source": [
+              "Feature Input"
+            ],
+            "title": "Modify Appointment",
+            "dependsOn": [],
+            "conflictsWith": [],
+            "postconditions": [
+              "Appointment record updated"
+            ],
+            "traceToFeatures": [
+              "FEAT-002"
+            ],
+            "id": "FR-003",
+            "notes": "",
+            "rationale": "Required for appointment management.",
+            "fitCriterion": "Appointment record reflects the new date or is marked as 'Cancelled'.",
+            "category": "Workflow",
+            "traceToAssumptions": []
+          },
+          {
+            "traceToFeatures": [
+              "FEAT-003"
+            ],
+            "category": "Reporting",
+            "preconditions": [
+              "User is logged in as doctor"
+            ],
+            "source": [
+              "Feature Input"
+            ],
+            "rationale": "Required for doctors to manage their workload.",
+            "id": "FR-004",
+            "postconditions": [
+              "Schedule displayed"
+            ],
+            "conflictsWith": [],
+            "statement": "The system shall display the daily appointment list for the authenticated doctor.",
+            "notes": "",
+            "priority": "Medium",
+            "fitCriterion": "The list includes all active appointments for the current day for the doctor.",
+            "traceToConstraints": [],
+            "verificationMethod": "Demonstration",
+            "title": "View Doctor Schedule",
+            "dependsOn": [
+              "ASM-002"
+            ],
+            "traceToAssumptions": [
+              "ASM-002"
+            ]
+          }
+        ],
+        "features": [
+          {
+            "description": "Patients can book appointments with available doctors.",
+            "priority": "High",
+            "id": "FEAT-001",
+            "name": "Appointment Booking",
+            "source": "Input"
+          },
+          {
+            "source": "Input",
+            "priority": "High",
+            "description": "Patients can reschedule or cancel appointments.",
+            "id": "FEAT-002",
+            "name": "Appointment Management"
+          },
+          {
+            "source": "Input",
+            "description": "Doctors can view their daily appointment schedule.",
+            "name": "Doctor Schedule View",
+            "priority": "Medium",
+            "id": "FEAT-003"
+          }
+        ],
+        "assumptions": [
+          {
+            "id": "ASM-001",
+            "source": "Input",
+            "statement": "Users have stable internet connection",
+            "rationale": "Required for web-based access to the system."
+          },
+          {
+            "id": "ASM-002",
+            "statement": "Authentication service is available to distinguish between patient and doctor roles.",
+            "rationale": "Necessary to enforce role-based access for booking vs. viewing schedules.",
+            "source": "Inferred"
+          }
+        ],
+        "projectName": "Hospital Booking System",
+        "constraints": [
+          {
+            "rationale": "System performance requirement for concurrent access.",
+            "statement": "Must support 500 concurrent users",
+            "source": "Input",
+            "id": "CON-001"
+          }
+        ],
+        "nonFunctionalRequirements": {
+          "scalabilityRequirements": [],
+          "usabilityRequirements": [],
+          "auditabilityRequirements": [],
+          "maintainabilityRequirements": [],
+          "accessibilityRequirements": [],
+          "backupRecoveryRequirements": [],
+          "complianceRequirements": [],
+          "reliabilityRequirements": [],
+          "securityRequirements": [],
+          "portabilityRequirements": [],
+          "availabilityRequirements": [],
+          "performanceRequirements": [
+            {
+              "id": "NFR-PERF-001",
+              "traceToAssumptions": [],
+              "notes": "",
+              "rationale": "System must handle the specified concurrent load.",
+              "title": "Concurrent User Support",
+              "traceToConstraints": [
+                "CON-001"
+              ],
+              "fitCriterion": "Performance test results showing 95th percentile response time < 3s.",
+              "priority": "High",
+              "traceToFeatures": [
+                "FEAT-001",
+                "FEAT-002",
+                "FEAT-003"
+              ],
+              "statement": "The system shall maintain response times under 3 seconds for 500 concurrent users.",
+              "verificationMethod": "Performance Test",
+              "source": [
+                "Constraint"
+              ]
+            }
+          ]
+        }
+      },
+      "validation": {
+        "issues": [
+          {
+            "severity": "warning",
+            "message": "Fit criterion appears weak or non-measurable.",
+            "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions.",
+            "field": "fitCriterion",
+            "details": {
+              "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests).",
+              "matchedTerms": [],
+              "actual": "Database contains the new appointment record with status 'Booked'."
+            },
+            "requirementId": "FR-002",
+            "requirementType": "FR",
+            "category": "verifiability"
+          },
+          {
+            "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions.",
+            "severity": "warning",
+            "requirementType": "FR",
+            "requirementId": "FR-003",
+            "message": "Fit criterion appears weak or non-measurable.",
+            "category": "verifiability",
+            "field": "fitCriterion",
+            "details": {
+              "matchedTerms": [],
+              "actual": "Appointment record reflects the new date or is marked as 'Cancelled'.",
+              "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests)."
+            }
+          },
+          {
+            "severity": "warning",
+            "message": "Fit criterion appears weak or non-measurable.",
+            "requirementId": "FR-004",
+            "field": "fitCriterion",
+            "requirementType": "FR",
+            "category": "verifiability",
+            "details": {
+              "actual": "The list includes all active appointments for the current day for the doctor.",
+              "matchedTerms": [],
+              "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests)."
+            },
+            "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions."
+          }
+        ],
+        "byType": {
+          "FR": {
+            "issues": [
+              {
+                "severity": "warning",
+                "category": "verifiability",
+                "message": "Fit criterion appears weak or non-measurable.",
+                "field": "fitCriterion",
+                "details": {
+                  "actual": "Database contains the new appointment record with status 'Booked'.",
+                  "matchedTerms": [],
+                  "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests)."
+                },
+                "requirementId": "FR-002",
+                "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions.",
+                "requirementType": "FR"
+              },
+              {
+                "requirementId": "FR-003",
+                "field": "fitCriterion",
+                "severity": "warning",
+                "message": "Fit criterion appears weak or non-measurable.",
+                "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions.",
+                "details": {
+                  "matchedTerms": [],
+                  "actual": "Appointment record reflects the new date or is marked as 'Cancelled'.",
+                  "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests)."
+                },
+                "requirementType": "FR",
+                "category": "verifiability"
+              },
+              {
+                "requirementId": "FR-004",
+                "suggestion": "Rewrite fit criterion with measurable limits, scope, and test conditions.",
+                "field": "fitCriterion",
+                "message": "Fit criterion appears weak or non-measurable.",
+                "details": {
+                  "matchedTerms": [],
+                  "actual": "The list includes all active appointments for the current day for the doctor.",
+                  "expected": "Objective and testable condition (e.g., p95 <= 3s for 95% requests)."
+                },
+                "requirementType": "FR",
+                "category": "verifiability",
+                "severity": "warning"
+              }
+            ],
+            "summary": {
+              "warnings": 3,
+              "totalRequirements": 4,
+              "errors": 0,
+              "totalIssues": 3
+            },
+            "qualityScore": 85
+          },
+          "NFR": {
+            "issues": [],
+            "qualityScore": 100,
+            "summary": {
+              "totalIssues": 0,
+              "errors": 0,
+              "warnings": 0,
+              "totalRequirements": 1
+            }
+          }
+        },
+        "isValid": true,
+        "summary": {
+          "warnings": 3,
+          "errors": 0,
+          "totalIssues": 3,
+          "totalRequirements": 5
+        },
+        "qualityScore": 85
+      },
+      "autoFixSuggestions": [
+        {
+          "category": "verifiability",
+          "requirementId": "FR-002",
+          "requirementType": "FR",
+          "message": "Fit criterion appears weak or non-measurable.",
+          "suggestion": "Add a fit criterion with metric, threshold, and test condition (example: 95% <= 3 seconds under normal load)."
+        },
+        {
+          "requirementType": "FR",
+          "message": "Fit criterion appears weak or non-measurable.",
+          "category": "verifiability",
+          "requirementId": "FR-003",
+          "suggestion": "Add a fit criterion with metric, threshold, and test condition (example: 95% <= 3 seconds under normal load)."
+        },
+        {
+          "message": "Fit criterion appears weak or non-measurable.",
+          "requirementType": "FR",
+          "suggestion": "Add a fit criterion with metric, threshold, and test condition (example: 95% <= 3 seconds under normal load).",
+          "requirementId": "FR-004",
+          "category": "verifiability"
+        }
+      ],
+      "prediction": [
+        {
+          "statement": "The system shall allow patients to query available doctor slots based on date and doctor ID.",
+          "smell_boolean": 0,
+          "confidence": 0.68,
+          "id": "fr-001"
+        },
+        {
+          "confidence": 0.61,
+          "statement": "The system shall create an appointment record linked to a specific patient and doctor.",
+          "smell_boolean": 0,
+          "id": "fr-002"
+        },
+        {
+          "statement": "The system shall allow patients to update the date or cancel an existing appointment.",
+          "smell_boolean": 0,
+          "id": "fr-003",
+          "confidence": 0.54
+        },
+        {
+          "smell_boolean": 0,
+          "statement": "The system shall display the daily appointment list for the authenticated doctor.",
+          "id": "fr-004",
+          "confidence": 0.73
+        },
+        {
+          "statement": "The system shall maintain response times under 3 seconds for 500 concurrent users.",
+          "smell_boolean": 0,
+          "confidence": 0.81,
+          "id": "nfr-perf-001"
+        }
+      ]
+    },
+    "projectId": "9a010e7c-a482-4971-b3a6-a05a8242a30c"
+  }
+}
+
 router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
   try {
+    if (mock_return) {
+      return res.json(mockDetailedFrNfrResponse);
+    }
+
     const {
       userId,
       projectId,
@@ -487,13 +884,12 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
     const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
     const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
 
-    let fileStorageResult: { id: string; filePath: string } | null = null;
     let dynamoRecord: any = null;
 
     // @ts-ignore
     if (STORAGE_MODE === 'json') {
       try {
-        fileStorageResult = await storeGeneratedSrs({
+        await storeGeneratedSrs({
           projectName: project_name.trim(),
           kind: 'srs-generation',
           payload: {
@@ -553,7 +949,7 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
-      ...dynamoRecord
+      ...dynamoRecord,
       // success: true,
       // userId: STORAGE_MODE === 'dynamo' && typeof userId === 'string' ? userId.trim() : undefined,
       // projectId: dynamoRecord?.projectId || undefined,

@@ -372,7 +372,7 @@ const openApiSpec = {
         },
       },
     },
-    '/api/srs/nf-nfr-detailed': {
+    '/api/srs/fr-nfr-detailed': {
       post: {
         tags: ['SRS'],
         summary: 'Generate detailed FR/NFR JSON',
@@ -501,7 +501,7 @@ const openApiSpec = {
         },
       },
     },
-    '/api/srs/reprompt-nf-nfr-detailed': {
+    '/api/srs/reprompt-fr-nfr-detailed': {
       post: {
         tags: ['SRS'],
         summary: 'Revise detailed FR/NFR JSON using follow-up prompt',
