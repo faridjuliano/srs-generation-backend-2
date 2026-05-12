@@ -6,6 +6,7 @@ export interface DynamoGeneratedSrsPayload {
   content: Record<string, unknown>;
   validation?: unknown;
   autoFixSuggestions?: unknown;
+  prediction?: unknown;
 }
 
 export interface DynamoProjectRecord {

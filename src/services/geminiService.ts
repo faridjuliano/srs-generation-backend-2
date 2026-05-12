@@ -29,7 +29,7 @@ export async function generateWithGemini(prompt: string): Promise<string> {
     model: modelName,
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 8000,
+      maxOutputTokens: 9000,
       responseMimeType: 'application/json'
     }
   });

@@ -12,7 +12,8 @@ import {
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
 import { storeGeneratedSrs, retrieveStoredSrs } from '../services/srsStorage';
-import { createProjectRecord } from '../services/dynamoSrsStorage';
+import { createProjectRecord, getProjectByUserAndProjectId, updateGeneratedSrsForProject } from '../services/dynamoSrsStorage';
+import type { DynamoGeneratedSrsPayload } from '../services/dynamoSrsStorage';
 import { validateSRS } from '../validators/srsValidator';
 import { getAutoFixSuggestionsFromValidation, validateGeneratedRequirements } from '../validators/frNfr';
 import type { FrNfrValidationMode, ValidationModel } from '../types/frNfrValidation';
@@ -358,7 +359,7 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
   }
 });
 
-const mock_return: boolean = false;
+const mock_return: boolean = true;
 
 const mockDetailedFrNfrResponse = {
   "success": true,
@@ -1032,6 +1033,122 @@ router.post('/reprompt-fr-nfr-detailed', async (req: Request, res: Response) => 
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to revise detailed FR/NFR content',
+    });
+  }
+});
+
+router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: Response) => {
+  try {
+    const { userId, projectId } = req.params;
+
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid "userId" parameter.',
+      });
+    }
+
+    if (!projectId || typeof projectId !== 'string' || projectId.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid "projectId" parameter.',
+      });
+    }
+
+    const project = await getProjectByUserAndProjectId(userId, projectId);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found',
+      });
+    }
+
+    console.log('=== REPROMT FR/NFR V2 PROJECT ===');
+    console.log(project);
+
+    const projectContent = project.generatedSrs && typeof project.generatedSrs === 'object' && !Array.isArray(project.generatedSrs)
+      ? (project.generatedSrs as { content?: unknown }).content
+      : null;
+
+    if (!projectContent || typeof projectContent !== 'object' || Array.isArray(projectContent)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project does not contain a valid generatedSrs.content object.',
+      });
+    }
+
+    const instruction = typeof req.body?.instruction === 'string' && req.body.instruction.trim().length > 0
+      ? req.body.instruction.trim()
+      : 'Reprompt and improve the existing FR/NFR document. Return valid JSON only.';
+
+    const revisionPrompt = generateFrNfrRevisionPrompt(projectContent as Record<string, unknown>, instruction);
+    console.log('=== REPROMT FR/NFR V2 PROMPT ===');
+    console.log(revisionPrompt);
+
+    const rawText = await generateWithGemini(revisionPrompt);
+    console.log('=== REPROMT FR/NFR V2 RAW GEMINI RESPONSE ===');
+    console.log(rawText);
+
+    let revised: unknown;
+    try {
+      revised = JSON.parse(rawText);
+    } catch {
+      const repaired = await repairJson(rawText);
+      revised = JSON.parse(repaired);
+    }
+
+    console.log('=== REPROMT FR/NFR V2 PARSED RESPONSE ===');
+    console.log(revised);
+
+    const validatedRevised = await validateGeneratedRequirements(revised as any, {
+      validationModel: 'rule-based',
+    });
+    const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validatedRevised);
+    const prediction = await handlePrediction(revised as Record<string, unknown>);
+
+    console.log('=== REPROMT FR/NFR V2 RULE-BASED VALIDATION ===');
+    console.log(validatedRevised);
+    console.log('=== REPROMT FR/NFR V2 PREDICTION ===');
+    console.log(prediction);
+
+    const generatedSrsPayload: DynamoGeneratedSrsPayload = {
+      content: revised as Record<string, unknown>,
+      validation: validatedRevised,
+      autoFixSuggestions,
+      prediction: prediction || null,
+    };
+
+    const updatedProject = await updateGeneratedSrsForProject({
+      userId: userId.trim(),
+      projectId: projectId.trim(),
+      generatedSrs: generatedSrsPayload,
+    });
+
+    if (!updatedProject) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update project generated SRS in DynamoDB.',
+      });
+    }
+
+    console.log('=== REPROMT FR/NFR V2 UPDATED PROJECT ===');
+    console.log(updatedProject);
+    console.log('=== END REPROMT FR/NFR V2 PROJECT ===');
+
+    return res.json({
+      success: true,
+      data: updatedProject,
+      reprompted: revised,
+      validation: validatedRevised,
+      autoFixSuggestions,
+      prediction,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to reprompt project',
+      error: error instanceof Error ? error.message : error,
     });
   }
 });
