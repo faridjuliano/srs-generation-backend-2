@@ -2210,16 +2210,26 @@ ${instruction}
 CURRENT FR/NFR JSON:
 ${JSON.stringify(frNfrContent, null, 2)}
 
-RULES:
-- Return VALID JSON only
-- No markdown
-- No code fences
-- Keep the same FR/NFR-only top-level schema and field names
-- Preserve existing valid sections unless the instruction requires changes
-- Keep IDs consistent and unique
-- Ensure traces to features/use cases remain valid whenever possible
-- Functional and non-functional requirement statements must begin with "The system shall ..."
-- Do not add full SRS sections such as revision history, external interfaces, or appendices
+FINAL OUTPUT RULES:
+- Return JSON only.
+- Use the exact field names provided.
+- Do not omit any top-level section.
+- Include all NFR category arrays shown in the schema.
+- For irrelevant NFR categories, return an empty array.
+- Do not use placeholder text such as "Requirement 1".
+- Ensure all ID references point to valid existing IDs.
+- Ensure every FR has rationale, source, fitCriterion, verificationMethod, and trace links.
+- Ensure every NFR has rationale, source, fitCriterion, verificationMethod, and trace links where applicable.
+- Ensure requirements are specific enough to support later rule-based validation.
+- Prefer comprehensive coverage over minimal output, but do not invent unsupported domain facts.
+- Before returning the final JSON, internally verify:
+  - valid JSON syntax
+  - unique IDs
+  - no broken trace links
+  - no duplicate requirements
+  - no vague unverifiable wording
+  - each requirement starts with "The system shall ..."
+  - every fitCriterion is testable, inspectable, analyzable, or demonstrable
 
 OUTPUT:
 Return the fully revised FR/NFR JSON object only.

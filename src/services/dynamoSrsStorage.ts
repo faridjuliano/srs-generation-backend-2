@@ -113,6 +113,7 @@ export async function updateGeneratedSrsForProject(input: UpdateGeneratedSrsInpu
 
     return (response.Attributes as DynamoProjectRecord | undefined) || null;
   } catch (error) {
+    console.log('error dynamo update:', error)
     return null;
   }
 }

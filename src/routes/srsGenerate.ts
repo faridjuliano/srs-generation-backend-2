@@ -359,7 +359,7 @@ router.post('/reprompt-fr-nfr', async (req: Request, res: Response) => {
   }
 });
 
-const mock_return: boolean = true;
+const mock_return: boolean = false;
 
 const mockDetailedFrNfrResponse = {
   "success": true,
@@ -883,7 +883,7 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
         })
       : null;
     const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
-    const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
+    // const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
 
     let dynamoRecord: any = null;
 
@@ -927,7 +927,7 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
 
         const generatedSrsPayload = {
           content: parsed as Record<string, unknown>,
-          prediction: MLPrediction,
+          // prediction: MLPrediction,
           validation: validation || null,
           autoFixSuggestions: autoFixSuggestions || null,
         };
@@ -1064,9 +1064,6 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
       });
     }
 
-    console.log('=== REPROMT FR/NFR V2 PROJECT ===');
-    console.log(project);
-
     const projectContent = project.generatedSrs && typeof project.generatedSrs === 'object' && !Array.isArray(project.generatedSrs)
       ? (project.generatedSrs as { content?: unknown }).content
       : null;
@@ -1083,13 +1080,8 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
       : 'Reprompt and improve the existing FR/NFR document. Return valid JSON only.';
 
     const revisionPrompt = generateFrNfrRevisionPrompt(projectContent as Record<string, unknown>, instruction);
-    console.log('=== REPROMT FR/NFR V2 PROMPT ===');
-    console.log(revisionPrompt);
 
     const rawText = await generateWithGemini(revisionPrompt);
-    console.log('=== REPROMT FR/NFR V2 RAW GEMINI RESPONSE ===');
-    console.log(rawText);
-
     let revised: unknown;
     try {
       revised = JSON.parse(rawText);
@@ -1098,25 +1090,17 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
       revised = JSON.parse(repaired);
     }
 
-    console.log('=== REPROMT FR/NFR V2 PARSED RESPONSE ===');
-    console.log(revised);
-
     const validatedRevised = await validateGeneratedRequirements(revised as any, {
       validationModel: 'rule-based',
     });
     const autoFixSuggestions = getAutoFixSuggestionsFromValidation(validatedRevised);
-    const prediction = await handlePrediction(revised as Record<string, unknown>);
-
-    console.log('=== REPROMT FR/NFR V2 RULE-BASED VALIDATION ===');
-    console.log(validatedRevised);
-    console.log('=== REPROMT FR/NFR V2 PREDICTION ===');
-    console.log(prediction);
+    // const prediction = await handlePrediction(revised as Record<string, unknown>);
 
     const generatedSrsPayload: DynamoGeneratedSrsPayload = {
       content: revised as Record<string, unknown>,
       validation: validatedRevised,
       autoFixSuggestions,
-      prediction: prediction || null,
+      // prediction: prediction || null,
     };
 
     const updatedProject = await updateGeneratedSrsForProject({
@@ -1125,6 +1109,7 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
       generatedSrs: generatedSrsPayload,
     });
 
+
     if (!updatedProject) {
       return res.status(500).json({
         success: false,
@@ -1132,17 +1117,10 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
       });
     }
 
-    console.log('=== REPROMT FR/NFR V2 UPDATED PROJECT ===');
-    console.log(updatedProject);
-    console.log('=== END REPROMT FR/NFR V2 PROJECT ===');
 
     return res.json({
       success: true,
-      data: updatedProject,
-      reprompted: revised,
-      validation: validatedRevised,
-      autoFixSuggestions,
-      prediction,
+      ...updatedProject,
     });
   } catch (error) {
     return res.status(500).json({
