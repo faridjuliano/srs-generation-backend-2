@@ -443,18 +443,9 @@ const openApiSpec = {
                   type: 'object',
                   properties: {
                     success: { type: 'boolean', example: true },
-                        userId: { type: 'string', example: 'user-123', nullable: true },
-                        projectId: { type: 'string', example: 'proj-456', nullable: true },
-                        fileStorage: {
-                          type: 'object',
-                          nullable: true,
-                          properties: {
-                            id: { type: 'string', example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
-                            filePath: { type: 'string', example: '/Users/.../src/database/a1b2c3d4-e5f6-7890-abcd-ef1234567890.json' },
-                          },
-                          required: ['id', 'filePath'],
-                        },
-                        dynamoRecord: { $ref: '#/components/schemas/DynamoProjectRecord', nullable: true },
+                    userId: { type: 'string', example: 'user-123', nullable: true },
+                    projectId: { type: 'string', example: 'proj-456', nullable: true },
+                    dynamoRecord: { $ref: '#/components/schemas/DynamoProjectRecord', nullable: true },
                     content: { type: 'object', additionalProperties: true },
                     validation: { $ref: '#/components/schemas/FrNfrValidationResult', nullable: true },
                     autoFixSuggestions: {
@@ -463,7 +454,7 @@ const openApiSpec = {
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                     },
                   },
-                      required: ['success', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
