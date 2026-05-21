@@ -11,7 +11,6 @@ import {
 } from '../prompts/promptBuilder';
 import { generateWithGemini } from '../services/geminiService';
 import { repairJson } from '../services/jsonRepairService';
-import { storeGeneratedSrs, retrieveStoredSrs } from '../services/srsStorage';
 import { createProjectRecord, getProjectByUserAndProjectId, updateGeneratedSrsForProject } from '../services/dynamoSrsStorage';
 import type { DynamoGeneratedSrsPayload } from '../services/dynamoSrsStorage';
 import { validateSRS } from '../validators/srsValidator';
@@ -22,8 +21,6 @@ import {convertFR, convertNFR} from "../utils/contentParser";
 const router = Router();
 
 const ENABLE_VALIDATION = true;
-// hardcoded storage mode: 'json' => store only as JSON file; 'dynamo' => store in DynamoDB (and still write JSON file as backup)
-const STORAGE_MODE: 'json' | 'dynamo' = 'dynamo';
 const ACTIVE_PROMPT_SET: 'default' | 'iso-strict' | 'ieee-strict' = 'iso-strict';
 
 function enforceCurrentDate(content: Record<string, unknown>): Record<string, unknown> {
@@ -885,67 +882,44 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
     const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
     // const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
 
-    let dynamoRecord: any = null;
+    if (typeof userId !== 'string' || !userId.trim().length) {
+      return res.status(400).json({
+        success: false,
+        error: 'Request body must include a non-empty "userId" string to persist generated SRS to DynamoDB.',
+      });
+    }
 
-    // @ts-ignore
-    if (STORAGE_MODE === 'json') {
-      try {
-        await storeGeneratedSrs({
-          projectName: project_name.trim(),
-          kind: 'srs-generation',
-          payload: {
-            // content: normalizedDetailedOutput as Record<string, unknown>,
-            content: parsed as Record<string, unknown>,
-            validation,
-          },
-        });
-      } catch (err) {
-        console.error('Failed to write JSON file for generated SRS:', err);
-        return res.status(500).json({
-          success: false,
-          error: err instanceof Error ? err.message : 'Failed to persist to JSON storage',
-        });
-      }
-    } else {
-      // require a user identifier to store into DynamoDB
-      if (typeof userId !== 'string' || !userId.trim().length) {
-        return res.status(400).json({
-          success: false,
-          error: 'STORAGE_MODE is set to "dynamo" - request body must include a non-empty "userId" string to persist to DynamoDB.',
-        });
-      }
+    const finalProjectId = typeof projectId === 'string' && projectId.trim().length > 0
+      ? projectId.trim()
+      : randomUUID();
 
-      const finalProjectId = typeof projectId === 'string' && projectId.trim().length > 0
-        ? projectId.trim()
-        : randomUUID();
+    let dynamoRecord: any;
+    try {
+      const userId_trimmed = userId.trim();
+      const projectId_final = finalProjectId;
+      const projectName_final = project_name.trim();
+      const projectDescription_final = project_description.trim();
 
-      try {
-        const userId_trimmed = userId.trim();
-        const projectId_final = finalProjectId;
-        const projectName_final = project_name.trim();
-        const projectDescription_final = project_description.trim();
+      const generatedSrsPayload = {
+        content: parsed as Record<string, unknown>,
+        // prediction: MLPrediction,
+        validation: validation || null,
+        autoFixSuggestions: autoFixSuggestions || null,
+      };
 
-        const generatedSrsPayload = {
-          content: parsed as Record<string, unknown>,
-          // prediction: MLPrediction,
-          validation: validation || null,
-          autoFixSuggestions: autoFixSuggestions || null,
-        };
-
-        dynamoRecord = await createProjectRecord({
-          userId: userId_trimmed,
-          projectId: projectId_final,
-          projectName: projectName_final,
-          projectDescription: projectDescription_final,
-          generatedSrs: generatedSrsPayload,
-        });
-      } catch (err) {
-        console.error('Failed to persist generated SRS to DynamoDB:', err);
-        return res.status(500).json({
-          success: false,
-          error: err instanceof Error ? err.message : 'Failed to persist to DynamoDB',
-        });
-      }
+      dynamoRecord = await createProjectRecord({
+        userId: userId_trimmed,
+        projectId: projectId_final,
+        projectName: projectName_final,
+        projectDescription: projectDescription_final,
+        generatedSrs: generatedSrsPayload,
+      });
+    } catch (err) {
+      console.error('Failed to persist generated SRS to DynamoDB:', err);
+      return res.status(500).json({
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to persist to DynamoDB',
+      });
     }
 
     return res.json({
@@ -1131,37 +1105,5 @@ router.post('/reprompt-fr-nfr-v2/:userId/:projectId', async (req: Request, res: 
   }
 });
 
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    if (!id || typeof id !== 'string' || id.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing or invalid "id" parameter.',
-      });
-    }
-
-    const record = await retrieveStoredSrs(id.trim());
-
-    if (!record) {
-      return res.status(404).json({
-        success: false,
-        error: `SRS record with id "${id}" not found.`,
-      });
-    }
-
-    return res.json({
-      success: true,
-      record,
-    });
-  } catch (error) {
-    console.error('SRS retrieval error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to retrieve SRS',
-    });
-  }
-});
 
 export default router;
