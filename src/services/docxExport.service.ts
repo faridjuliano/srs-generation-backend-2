@@ -7,7 +7,8 @@ import { stripEmptySectionsFromDocxBuffer } from "../utils/docxSectionStripper";
 
 export function generateSrsDocx(data: SrsFrNfrExportData): Buffer {
   const templatePath = path.resolve(
-    process.cwd(),
+    __dirname,
+    "..",
     "templates",
     "ieee-srs-template.docx"
   );
