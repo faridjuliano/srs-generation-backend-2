@@ -246,7 +246,7 @@ const openApiSpec = {
                       items: { $ref: '#/components/schemas/AutoFixSuggestion' },
                     },
                   },
-                  required: ['success', 'id', 'filePath', 'content', 'validation', 'autoFixSuggestions'],
+                  required: ['success', 'content', 'validation', 'autoFixSuggestions'],
                 },
               },
             },
@@ -1072,6 +1072,58 @@ const openApiSpec = {
         },
       },
     },
+    '/api/export/srs': {
+      post: {
+        tags: ['SRS'],
+        summary: 'Export stored SRS as DOCX',
+        description: 'Accepts a stored project payload (including generatedSrs.content) and returns a populated .docx SRS document as a binary download.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/StoredSrsProject' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'DOCX file generated successfully',
+            content: {
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+                schema: { type: 'string', format: 'binary' },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid request body',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string', example: 'Invalid request body. Missing generatedSrs.content.' },
+                  },
+                },
+              },
+            },
+          },
+          '500': {
+            description: 'Server error while generating DOCX',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string', example: 'Failed to export SRS document' },
+                    error: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   },
   components: {
     schemas: {
@@ -1282,6 +1334,25 @@ const openApiSpec = {
           notes: { type: 'string' },
         },
         required: ['id', 'title', 'statement', 'rationale', 'source', 'priority', 'fitCriterion', 'verificationMethod'],
+      },
+      StoredSrsProject: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string', example: 'proj-456' },
+          projectName: { type: 'string', example: 'Hospital Booking System' },
+          projectDescription: { type: 'string', nullable: true },
+          userId: { type: 'string', nullable: true },
+          generatedSrs: {
+            type: 'object',
+            properties: {
+              content: { $ref: '#/components/schemas/GeneratedRequirementsDocument' },
+              validation: { type: 'object', additionalProperties: true },
+              autoFixSuggestions: { type: 'array', items: { type: 'object' } },
+            },
+            required: ['content'],
+          },
+        },
+        required: ['projectId', 'generatedSrs'],
       },
       DynamoProjectRecord: {
         type: 'object',
