@@ -8,6 +8,7 @@ import autoFixRouter from './routes/autoFix';
 import openApiSpec from './docs/openapi';
 import projectRoutes from "./routes/project";
 import exportRoutes from "./routes/export.routes";
+import authRoutes from './routes/auth';
 
 const app = express();
 
@@ -25,5 +26,6 @@ app.use('/api/srs', validateRouter);
 app.use('/api/srs', autoFixRouter);
 app.use("/api/projects", projectRoutes);
 app.use("/api/export", exportRoutes);
+app.use('/api/auth', authRoutes);
 
 export default app;
