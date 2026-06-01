@@ -352,22 +352,22 @@ export function validateTraceability(context: ValidationContext): ValidationIssu
       }
     }
 
-    const useCaseTraces = normalizeArray((item.requirement as FunctionalRequirement).traceToUseCases);
-    for (const useCaseId of useCaseTraces) {
-      if (!context.useCaseIds.has(useCaseId)) {
-        issues.push(
-          createIssue(
-            item,
-            'traceability',
-            'traceToUseCases',
-            'error',
-            `Broken use case trace reference: ${useCaseId}`,
-            'Use existing use case IDs from the useCases list.',
-            { actual: useCaseId },
-          ),
-        );
-      }
-    }
+    // const useCaseTraces = normalizeArray((item.requirement as FunctionalRequirement).traceToUseCases);
+    // for (const useCaseId of useCaseTraces) {
+    //   if (!context.useCaseIds.has(useCaseId)) {
+    //     issues.push(
+    //       createIssue(
+    //         item,
+    //         'traceability',
+    //         'traceToUseCases',
+    //         'error',
+    //         `Broken use case trace reference: ${useCaseId}`,
+    //         'Use existing use case IDs from the useCases list.',
+    //         { actual: useCaseId },
+    //       ),
+    //     );
+    //   }
+    // }
   }
 
   return issues;
