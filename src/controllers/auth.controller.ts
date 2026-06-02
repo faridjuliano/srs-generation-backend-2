@@ -1,22 +1,9 @@
   import { Request, Response } from 'express';
   import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
     import jwt, { SignOptions } from 'jsonwebtoken';
+import { getUserByEmail, createUser, touchUserUpdatedAt, UserRecord } from '../services/user.service';
 
-/**
- * Temporary in-memory user store.
- * TODO: Replace with real DB integration (e.g., DynamoDB) and remove this map.
- */
-type UserRecord = {
-  email: string;
-  userId: string;
-  fName?: string;
-  lName?: string;
-  passwordHash: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const users = new Map<string, UserRecord>(); // email -> record
+// UserRecord type is imported from user.service
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
@@ -40,8 +27,10 @@ export async function register(req: Request, res: Response) {
       });
     }
 
-    // TODO: Replace in-memory check with DB query (e.g., getUserByEmail)
-    if (users.has(email.toLowerCase())) {
+    // Check for existing user in users table
+    const emailLower = email.toLowerCase();
+    const existing = await getUserByEmail(emailLower);
+    if (existing) {
       return res.status(409).json({ success: false, error: 'User already exists.' });
     }
 
@@ -53,7 +42,7 @@ export async function register(req: Request, res: Response) {
     const nowIso = new Date().toISOString();
 
     const record: UserRecord = {
-      email: email.toLowerCase(),
+      email: emailLower,
       userId: generatedUserId,
       fName: typeof fName === 'string' ? fName : undefined,
       lName: typeof lName === 'string' ? lName : undefined,
@@ -62,8 +51,16 @@ export async function register(req: Request, res: Response) {
       updatedAt: nowIso,
     };
 
-    // TODO: Persist the user record in your DB instead of in-memory map
-    users.set(record.email, record);
+    // persist the user record in DynamoDB users table
+    try {
+      await createUser(record);
+    } catch (err: any) {
+      // If conditional check failed someone created the user concurrently
+      if (err && err.name === 'ConditionalCheckFailedException') {
+        return res.status(409).json({ success: false, error: 'User already exists.' });
+      }
+      throw err;
+    }
 
     const token = generateToken({ sub: record.userId, email: record.email });
 
@@ -96,8 +93,9 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: 'Missing "email" or "password".' });
     }
 
-    // TODO: Replace in-memory lookup with DB query (e.g., getUserByEmail)
-    const record = users.get(email.toLowerCase());
+    // lookup user from DynamoDB users table
+    const emailLower = email.toLowerCase();
+    const record = await getUserByEmail(emailLower);
     if (!record) {
       return res.status(401).json({ success: false, error: 'Invalid credentials.' });
     }
@@ -115,8 +113,13 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ success: false, error: 'Invalid credentials.' });
     }
 
-    // update updatedAt to now
-    record.updatedAt = new Date().toISOString();
+    // update updatedAt timestamp in DB (best-effort)
+    try {
+      await touchUserUpdatedAt(emailLower);
+    } catch (err) {
+      // ignore touch errors
+      console.warn('Failed to update user updatedAt:', err);
+    }
 
     const token = generateToken({ sub: record.userId, email: record.email });
 
