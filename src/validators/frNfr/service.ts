@@ -428,28 +428,9 @@ export async function validateGeneratedRequirements(
   return validateGeneratedRequirementsRuleBased(input, config as Partial<ValidationConfig> | undefined);
 }
 
-export async function validateRequirements(
-  input: GeneratedRequirementsDocument,
-  options?: Partial<ValidationOptions> | Partial<ValidationConfig>,
-): Promise<ValidationResult> {
-  return validateGeneratedRequirements(input, options);
-}
-
-export async function validateGeneratedRequirementsWithModel(
-  input: GeneratedRequirementsDocument,
-  validationModel: ValidationModel = 'rule-based',
-  config?: Partial<ValidationConfig>,
-): Promise<ValidationResult> {
-  return validateGeneratedRequirements(input, { validationModel, config });
-}
 
 export function getAutoFixSuggestionsFromValidation(
   validationResult: ValidationResult,
 ): AutoFixSuggestion[] {
   return buildAutoFixSuggestions(validationResult.issues);
 }
-
-export const FR_NFR_VALIDATOR_SUPPORTED_CATEGORIES = NFR_CATEGORIES;
-export const DEFAULT_FR_NFR_VALIDATION_CONFIG = DEFAULT_VALIDATION_CONFIG;
-
-

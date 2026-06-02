@@ -6,9 +6,14 @@ import { SrsFrNfrExportData } from "../types/srs.types";
 import { stripEmptySectionsFromDocxBuffer } from "../utils/docxSectionStripper";
 
 export function generateSrsDocx(data: SrsFrNfrExportData): Buffer {
+  // const templatePath = path.resolve(
+  //   __dirname,
+  //   "..",
+  //   "templates",
+  //   "ieee-srs-template.docx"
+  // );
   const templatePath = path.resolve(
-    __dirname,
-    "..",
+    process.cwd(),
     "templates",
     "ieee-srs-template.docx"
   );
