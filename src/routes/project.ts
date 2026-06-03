@@ -5,6 +5,8 @@ import {
   listProjectsByUser,
   updateGeneratedSrsForProject,
 } from '../services/dynamoSrsStorage';
+import { QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { dynamoDb } from "../config/dynamo";
 
 const router = express.Router();
 
@@ -75,6 +77,39 @@ router.post('/', async (req, res) => {
       success: false,
       message: 'Failed to create project',
       error: error instanceof Error ? error.message : error,
+    });
+  }
+});
+
+router.get("/users/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const result = await dynamoDb.send(
+      new QueryCommand({
+        TableName: process.env.DYNAMODB_TABLE!,
+        KeyConditionExpression: "#userId = :userId",
+        ExpressionAttributeNames: {
+          "#userId": "userId",
+          "#projectId": "projectId",
+          "#projectName": "projectName",
+        },
+        ExpressionAttributeValues: {
+          ":userId": userId,
+        },
+        ProjectionExpression: "#projectId, #projectName",
+      })
+    );
+    return res.status(200).json({
+      success: true,
+      projects: result.Items ?? [],
+    });
+  } catch (error) {
+    console.error("Get projects error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get projects.",
     });
   }
 });

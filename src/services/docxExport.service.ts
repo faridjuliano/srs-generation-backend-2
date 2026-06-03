@@ -6,17 +6,24 @@ import { SrsFrNfrExportData } from "../types/srs.types";
 import { stripEmptySectionsFromDocxBuffer } from "../utils/docxSectionStripper";
 
 export function generateSrsDocx(data: SrsFrNfrExportData): Buffer {
-  // const templatePath = path.resolve(
-  //   __dirname,
-  //   "..",
-  //   "templates",
-  //   "ieee-srs-template.docx"
-  // );
-  const templatePath = path.resolve(
-    process.cwd(),
-    "templates",
-    "ieee-srs-template.docx"
-  );
+
+  let templatePath: string;
+
+  if (process.env.ENVIRONMENT === "production") {
+    templatePath = path.resolve(
+      __dirname,
+      "..",
+      "templates",
+      "ieee-srs-template.docx"
+    );
+  } else {
+    templatePath = path.resolve(
+      process.cwd(),
+      "src",
+      "templates",
+      "ieee-srs-template.docx"
+    );
+  }
 
   // Validate template exists and is a .docx file
   if (!fs.existsSync(templatePath)) {
