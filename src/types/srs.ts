@@ -13,16 +13,3 @@ export interface StoredSrsRecord {
   projectName: string;
   payload: StoredSrsPayload;
 }
-
-export interface StoreSrsInput {
-  kind?: SrsArtifactKind;
-  projectName: string;
-  payload: StoredSrsPayload;
-}
-
-export interface StoreSrsResult {
-  id: string;
-  filePath: string;
-  record: StoredSrsRecord;
-}
-

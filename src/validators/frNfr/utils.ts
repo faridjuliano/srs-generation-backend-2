@@ -28,7 +28,6 @@ export function mergeValidationConfig(config?: Partial<ValidationConfig>): Valid
   };
 }
 
-export const mergeConfig = mergeValidationConfig;
 
 export function normalizeText(value: string): string {
   return value
