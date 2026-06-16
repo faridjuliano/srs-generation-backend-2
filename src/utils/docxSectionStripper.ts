@@ -19,56 +19,38 @@ export function stripEmptySectionParagraphs(
 ): string {
   const emptySectionHeadings = new Set<string>();
 
+  /**
+   * Section 4: System Features
+   *
+   * If there are no features, remove the System Features heading.
+   */
   if (exportData.features.length === 0) {
     emptySectionHeadings.add("System Features");
   }
 
-  const qualityAttributeCounts = [
-    exportData.usabilityRequirements.length,
-    exportData.reliabilityRequirements.length,
-    exportData.availabilityRequirements.length,
-    exportData.maintainabilityRequirements.length,
-    exportData.portabilityRequirements.length,
-    exportData.accessibilityRequirements.length,
-    exportData.auditabilityRequirements.length,
-    exportData.scalabilityRequirements.length,
-    exportData.complianceRequirements.length,
-    exportData.backupRecoveryRequirements.length,
-  ];
-
-  const nfrSections = [
-    ["Performance Requirements", exportData.performanceRequirements.length],
-    ["Safety Requirements", exportData.safetyRequirements.length],
-    ["Security Requirements", exportData.securityRequirements.length],
-    ["Usability Requirements:", exportData.usabilityRequirements.length],
-    ["Reliability Requirements:", exportData.reliabilityRequirements.length],
-    ["Availability Requirements:", exportData.availabilityRequirements.length],
-    ["Maintainability Requirements:", exportData.maintainabilityRequirements.length],
-    ["Portability Requirements:", exportData.portabilityRequirements.length],
-    ["Accessibility Requirements:", exportData.accessibilityRequirements.length],
-    ["Auditability Requirements:", exportData.auditabilityRequirements.length],
-    ["Scalability Requirements:", exportData.scalabilityRequirements.length],
-    ["Compliance Requirements:", exportData.complianceRequirements.length],
-    ["Backup and Recovery Requirements:", exportData.backupRecoveryRequirements.length],
-  ] as const;
-
-  if (qualityAttributeCounts.every((count) => count === 0)) {
-    emptySectionHeadings.add("Software Quality Attributes");
-  }
-
-  if ([
-    exportData.performanceRequirements.length,
-    exportData.safetyRequirements.length,
-    exportData.securityRequirements.length,
-    ...qualityAttributeCounts,
-  ].every((count) => count === 0)) {
+  /**
+   * Section 5: Other Nonfunctional Requirements
+   *
+   * In the new dynamic template, NFR categories are stored inside:
+   *
+   * exportData.nonFunctionalRequirementSections
+   *
+   * Example:
+   * [
+   *   {
+   *     title: "Performance Requirements",
+   *     requirements: [...]
+   *   },
+   *   {
+   *     title: "Security Requirements",
+   *     requirements: [...]
+   *   }
+   * ]
+   *
+   * Empty NFR categories are already filtered in srsExportMapper.
+   */
+  if (exportData.nonFunctionalRequirementSections.length === 0) {
     emptySectionHeadings.add("Other Nonfunctional Requirements");
-  }
-
-  for (const [heading, count] of nfrSections) {
-    if (count === 0) {
-      emptySectionHeadings.add(heading);
-    }
   }
 
   let featureIndex = -1;
@@ -76,17 +58,31 @@ export function stripEmptySectionParagraphs(
   return documentXml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, (paragraphXml) => {
     const paragraphText = extractParagraphText(paragraphXml).trim();
 
+    /**
+     * Remove whole section headings if the section has no data.
+     */
     if (emptySectionHeadings.has(paragraphText)) {
       return "";
     }
 
+    /**
+     * Track current feature.
+     *
+     * This assumes your template contains:
+     * Feature ID: {id}
+     */
     if (paragraphText.startsWith("Feature ID:")) {
       featureIndex += 1;
       return paragraphXml;
     }
 
+    /**
+     * Remove "Functional Requirements" heading when a feature
+     * has no related functional requirements.
+     */
     if (paragraphText === "Functional Requirements") {
       const feature = exportData.features[featureIndex];
+
       if (feature && feature.relatedFunctionalRequirements.length === 0) {
         return "";
       }

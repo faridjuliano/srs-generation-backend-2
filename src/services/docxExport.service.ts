@@ -8,7 +8,6 @@ import { stripEmptySectionsFromDocxBuffer } from "../utils/docxSectionStripper";
 export function generateSrsDocx(data: SrsFrNfrExportData): Buffer {
 
   let templatePath: string;
-
   if (process.env.ENVIRONMENT === "production") {
     templatePath = path.resolve(
       __dirname,
@@ -19,7 +18,6 @@ export function generateSrsDocx(data: SrsFrNfrExportData): Buffer {
   } else {
     templatePath = path.resolve(
       process.cwd(),
-      "src",
       "templates",
       "ieee-srs-template.docx"
     );

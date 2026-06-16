@@ -21,11 +21,11 @@ function isNonEmptyFeature(
 ): feature is Feature {
   return Boolean(
     feature &&
-      (hasText(feature.id) ||
-        hasText(feature.name) ||
-        hasText(feature.description) ||
-        hasText(feature.priority) ||
-        hasText(feature.source))
+    (hasText(feature.id) ||
+      hasText(feature.name) ||
+      hasText(feature.description) ||
+      hasText(feature.priority) ||
+      hasText(feature.source))
   );
 }
 
@@ -34,23 +34,23 @@ function isNonEmptyFunctionalRequirement(
 ): requirement is FunctionalRequirement {
   return Boolean(
     requirement &&
-      (hasText(requirement.id) ||
-        hasText(requirement.statement) ||
-        hasText(requirement.title) ||
-        hasText(requirement.priority) ||
-        hasText(requirement.category) ||
-        hasText(requirement.rationale) ||
-        hasText(requirement.fitCriterion) ||
-        hasText(requirement.verificationMethod) ||
-        cleanStringArray(requirement.preconditions).length > 0 ||
-        cleanStringArray(requirement.postconditions).length > 0 ||
-        cleanStringArray(requirement.traceToFeatures).length > 0 ||
-        cleanStringArray(requirement.traceToAssumptions).length > 0 ||
-        cleanStringArray(requirement.traceToConstraints).length > 0 ||
-        cleanStringArray(requirement.dependsOn).length > 0 ||
-        cleanStringArray(requirement.conflictsWith).length > 0 ||
-        cleanStringArray(requirement.source).length > 0 ||
-        hasText(requirement.notes))
+    (hasText(requirement.id) ||
+      hasText(requirement.statement) ||
+      hasText(requirement.title) ||
+      hasText(requirement.priority) ||
+      hasText(requirement.category) ||
+      hasText(requirement.rationale) ||
+      hasText(requirement.fitCriterion) ||
+      hasText(requirement.verificationMethod) ||
+      cleanStringArray(requirement.preconditions).length > 0 ||
+      cleanStringArray(requirement.postconditions).length > 0 ||
+      cleanStringArray(requirement.traceToFeatures).length > 0 ||
+      cleanStringArray(requirement.traceToAssumptions).length > 0 ||
+      cleanStringArray(requirement.traceToConstraints).length > 0 ||
+      cleanStringArray(requirement.dependsOn).length > 0 ||
+      cleanStringArray(requirement.conflictsWith).length > 0 ||
+      cleanStringArray(requirement.source).length > 0 ||
+      hasText(requirement.notes))
   );
 }
 
@@ -59,18 +59,18 @@ function isNonEmptyNonFunctionalRequirement(
 ): requirement is NonFunctionalRequirement {
   return Boolean(
     requirement &&
-      (hasText(requirement.id) ||
-        hasText(requirement.statement) ||
-        hasText(requirement.title) ||
-        hasText(requirement.priority) ||
-        hasText(requirement.rationale) ||
-        hasText(requirement.fitCriterion) ||
-        hasText(requirement.verificationMethod) ||
-        cleanStringArray(requirement.traceToFeatures).length > 0 ||
-        cleanStringArray(requirement.traceToAssumptions).length > 0 ||
-        cleanStringArray(requirement.traceToConstraints).length > 0 ||
-        cleanStringArray(requirement.source).length > 0 ||
-        hasText(requirement.notes))
+    (hasText(requirement.id) ||
+      hasText(requirement.statement) ||
+      hasText(requirement.title) ||
+      hasText(requirement.priority) ||
+      hasText(requirement.rationale) ||
+      hasText(requirement.fitCriterion) ||
+      hasText(requirement.verificationMethod) ||
+      cleanStringArray(requirement.traceToFeatures).length > 0 ||
+      cleanStringArray(requirement.traceToAssumptions).length > 0 ||
+      cleanStringArray(requirement.traceToConstraints).length > 0 ||
+      cleanStringArray(requirement.source).length > 0 ||
+      hasText(requirement.notes))
   );
 }
 
@@ -102,14 +102,37 @@ function normalizeNonFunctionalRequirement(
   };
 }
 
-function normalizeRequirements<T extends FunctionalRequirement | NonFunctionalRequirement>(
-  items: unknown[],
+function normalizeRequirements<
+  T extends FunctionalRequirement | NonFunctionalRequirement
+>(
+  items: unknown,
   predicate: (item: Partial<T> | null | undefined) => item is T,
   normalize: (item: T) => T
 ): T[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
   return (items as Array<Partial<T> | null | undefined>)
     .filter(predicate)
     .map(normalize);
+}
+
+function normalizeNfrSection(
+  title: string,
+  requirements: unknown
+): {
+  title: string;
+  requirements: NonFunctionalRequirement[];
+} {
+  return {
+    title,
+    requirements: normalizeRequirements<NonFunctionalRequirement>(
+      requirements,
+      isNonEmptyNonFunctionalRequirement,
+      normalizeNonFunctionalRequirement
+    ),
+  };
 }
 
 export function mapStoredProjectToFrNfrExportData(
@@ -124,11 +147,70 @@ export function mapStoredProjectToFrNfrExportData(
   );
 
   const nonFunctionalRequirements = content.nonFunctionalRequirements || {};
-  const features = (content.features || []).filter(isNonEmptyFeature);
+
+  const features: Feature[] = Array.isArray(content.features)
+    ? content.features.filter(isNonEmptyFeature)
+    : [];
+
+  const nonFunctionalRequirementSections = [
+    normalizeNfrSection(
+      "Performance Requirements",
+      nonFunctionalRequirements.performanceRequirements
+    ),
+    normalizeNfrSection(
+      "Safety Requirements",
+      nonFunctionalRequirements.safetyRequirements
+    ),
+    normalizeNfrSection(
+      "Security Requirements",
+      nonFunctionalRequirements.securityRequirements
+    ),
+    normalizeNfrSection(
+      "Usability Requirements",
+      nonFunctionalRequirements.usabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Reliability Requirements",
+      nonFunctionalRequirements.reliabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Availability Requirements",
+      nonFunctionalRequirements.availabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Maintainability Requirements",
+      nonFunctionalRequirements.maintainabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Portability Requirements",
+      nonFunctionalRequirements.portabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Accessibility Requirements",
+      nonFunctionalRequirements.accessibilityRequirements
+    ),
+    normalizeNfrSection(
+      "Auditability Requirements",
+      nonFunctionalRequirements.auditabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Scalability Requirements",
+      nonFunctionalRequirements.scalabilityRequirements
+    ),
+    normalizeNfrSection(
+      "Compliance Requirements",
+      nonFunctionalRequirements.complianceRequirements
+    ),
+    normalizeNfrSection(
+      "Backup and Recovery Requirements",
+      nonFunctionalRequirements.backupRecoveryRequirements
+    ),
+  ].filter((section) => section.requirements.length > 0);
 
   return {
-    features: features.map((feature, index) => ({
-      number: `4.${index + 1}`,
+    projectName: content.projectName || project.projectName,
+
+    features: features.map((feature) => ({
       id: feature.id,
       name: feature.name,
       description: feature.description,
@@ -138,83 +220,6 @@ export function mapStoredProjectToFrNfrExportData(
       ),
     })),
 
-    performanceRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.performanceRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    safetyRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.safetyRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    securityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.securityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    usabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.usabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    reliabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.reliabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    availabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.availabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    maintainabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.maintainabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    portabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.portabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    accessibilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.accessibilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    auditabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.auditabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    scalabilityRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.scalabilityRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    complianceRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.complianceRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
-
-    backupRecoveryRequirements: normalizeRequirements<NonFunctionalRequirement>(
-      nonFunctionalRequirements.backupRecoveryRequirements || [],
-      isNonEmptyNonFunctionalRequirement,
-      normalizeNonFunctionalRequirement
-    ),
+    nonFunctionalRequirementSections,
   };
 }
-
