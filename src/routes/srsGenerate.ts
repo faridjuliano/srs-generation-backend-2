@@ -537,7 +537,7 @@ router.post('/fr-nfr-detailed', async (req: Request, res: Response) => {
           validationModel: resolvedValidationModel as ValidationModel,
         })
       : null;
-    const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
+    // const autoFixSuggestions = validation ? getAutoFixSuggestionsFromValidation(validation) : null;
     // const MLPrediction = await handlePrediction(parsed as Record<string, unknown>);
 
     if (typeof userId !== 'string' || !userId.trim().length) {

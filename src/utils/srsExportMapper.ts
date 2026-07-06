@@ -135,6 +135,52 @@ function normalizeNfrSection(
   };
 }
 
+/**
+ * Maps FRs into feature sections without duplicating them.
+ *
+ * If an FR traces to multiple features, it is displayed only under the first
+ * valid feature in traceToFeatures. However, the full traceToFeatures array
+ * is still preserved inside the requirement, so the DOCX can still show all
+ * trace links.
+ */
+function mapFeaturesWithUniqueFunctionalRequirements(
+  features: Feature[],
+  functionalRequirements: FunctionalRequirement[]
+): Array<
+  Feature & {
+  relatedFunctionalRequirements: FunctionalRequirement[];
+}
+> {
+  const featureIds = new Set(features.map((feature) => feature.id));
+  const exportedFrIds = new Set<string>();
+
+  return features.map((feature) => {
+    const relatedFunctionalRequirements = functionalRequirements.filter((fr) => {
+      if (!hasText(fr.id)) return false;
+
+      const traceToFeatures = cleanStringArray(fr.traceToFeatures);
+
+      if (traceToFeatures.length === 0) return false;
+
+      // Select the first valid feature as the display/primary feature.
+      const primaryFeatureId = traceToFeatures.find((id) => featureIds.has(id));
+
+      if (primaryFeatureId !== feature.id) return false;
+
+      // Extra protection: prevent the same FR from being exported twice.
+      if (exportedFrIds.has(fr.id)) return false;
+
+      exportedFrIds.add(fr.id);
+      return true;
+    });
+
+    return {
+      ...feature,
+      relatedFunctionalRequirements,
+    };
+  });
+}
+
 export function mapStoredProjectToFrNfrExportData(
   project: StoredSrsProject
 ): SrsFrNfrExportData {
@@ -210,15 +256,10 @@ export function mapStoredProjectToFrNfrExportData(
   return {
     projectName: content.projectName || project.projectName,
 
-    features: features.map((feature) => ({
-      id: feature.id,
-      name: feature.name,
-      description: feature.description,
-      priority: feature.priority,
-      relatedFunctionalRequirements: functionalRequirements.filter((fr) =>
-        fr.traceToFeatures?.includes(feature.id)
-      ),
-    })),
+    features: mapFeaturesWithUniqueFunctionalRequirements(
+      features,
+      functionalRequirements
+    ),
 
     nonFunctionalRequirementSections,
   };
