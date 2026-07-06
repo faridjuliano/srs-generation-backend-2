@@ -8,7 +8,11 @@ const client = new DynamoDBClient({
   region: process.env.AWS_REGION,
 });
 
-export const dynamoDb = DynamoDBDocumentClient.from(client);
+export const dynamoDb = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    removeUndefinedValues: true,
+  },
+});
 
 // Main application table used by project storage (old name: DYNAMODB_TABLE)
 export const TABLE_NAME = process.env.DYNAMODB_TABLE;

@@ -81,8 +81,20 @@ export interface NonFunctionalRequirements {
   backupRecoveryRequirements?: NonFunctionalRequirement[];
 }
 
+/**
+ * Export type for Section 4: System Features.
+ *
+ * This is used by Docxtemplater:
+ *
+ * {#features}
+ * {name}
+ * ...
+ * {#relatedFunctionalRequirements}
+ * {id}: {statement}
+ * {/relatedFunctionalRequirements}
+ * {/features}
+ */
 export interface ExportFeature {
-  number: string;
   id: string;
   name: string;
   description: string;
@@ -90,21 +102,30 @@ export interface ExportFeature {
   relatedFunctionalRequirements: FunctionalRequirement[];
 }
 
-export interface SrsFrNfrExportData {
-  features: ExportFeature[];
-
-  performanceRequirements: NonFunctionalRequirement[];
-  safetyRequirements: NonFunctionalRequirement[];
-  securityRequirements: NonFunctionalRequirement[];
-  usabilityRequirements: NonFunctionalRequirement[];
-  reliabilityRequirements: NonFunctionalRequirement[];
-  availabilityRequirements: NonFunctionalRequirement[];
-  maintainabilityRequirements: NonFunctionalRequirement[];
-  portabilityRequirements: NonFunctionalRequirement[];
-  accessibilityRequirements: NonFunctionalRequirement[];
-  auditabilityRequirements: NonFunctionalRequirement[];
-  scalabilityRequirements: NonFunctionalRequirement[];
-  complianceRequirements: NonFunctionalRequirement[];
-  backupRecoveryRequirements: NonFunctionalRequirement[];
+/**
+ * Export type for Section 5: Other Nonfunctional Requirements.
+ *
+ * This allows the NFR section headers to be dynamic.
+ *
+ * Example output:
+ * - Performance Requirements
+ * - Security Requirements
+ * - Usability Requirements
+ *
+ * Empty sections will not be exported if your mapper filters them out.
+ */
+export interface ExportNonFunctionalRequirementSection {
+  title: string;
+  requirements: NonFunctionalRequirement[];
 }
 
+/**
+ * Final export data passed into Docxtemplater.
+ *
+ * This matches the corrected dynamic DOCX template.
+ */
+export interface SrsFrNfrExportData {
+  projectName: string;
+  features: ExportFeature[];
+  nonFunctionalRequirementSections: ExportNonFunctionalRequirementSection[];
+}

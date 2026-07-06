@@ -93,16 +93,24 @@ router.get("/users/:userId", async (req, res) => {
           "#userId": "userId",
           "#projectId": "projectId",
           "#projectName": "projectName",
+          "#updatedAt": "updatedAt",
         },
         ExpressionAttributeValues: {
           ":userId": userId,
         },
-        ProjectionExpression: "#projectId, #projectName",
+        ProjectionExpression: "#projectId, #projectName, #updatedAt",
       })
     );
+
+    let projects = result.Items ?? [];
+
+    projects = projects.sort((a, b) => {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
     return res.status(200).json({
       success: true,
-      projects: result.Items ?? [],
+      projects: projects,
     });
   } catch (error) {
     console.error("Get projects error:", error);
